@@ -503,7 +503,7 @@ function drawDrive(D, M, uptoIdx){
   const top = 105, bot = 430;
   const lane = Math.min(34, (bot - top) / Math.max(1, n - 1 || 1));
   list.forEach((p, i) => {
-    const y = n === 1 ? 266 : top + i * lane;
+    const y = n === 1 ? 266 : top + (n - 1 - i) * lane; // newest play on the top lane
     const k = arrowKind(p);
     const sel = S.selPlay === p.id;
     const g = el('g', { opacity: S.selPlay && !sel ? .45 : 1, style: 'cursor:pointer' }, S.dyn);
@@ -548,7 +548,7 @@ function drawDrive(D, M, uptoIdx){
       t.textContent = p.ddt.replace(/ at .*/, '');
     }
   });
-  return { last: list[n-1], y: n === 1 ? 266 : top + (n-1) * lane };
+  return { last: list[n-1], y: n === 1 ? 266 : top };
 }
 
 function paintEndZones(M){
@@ -895,7 +895,7 @@ function richText(text, M){
     if (!pl) return raw;
     const tip = `${pl.full}${pl.jersey !== '' ? ' #' + pl.jersey : ''}, ${pl.posName || pl.pos}, ${pl.team.full || pl.team.name}`;
     return `<span class="pn" style="--tc:${readable(pl.team)}" title="${esc(tip)}">${nm}${pl.pos ? `<small>${esc(pl.team.abbr)} ${esc(pl.pos)}</small>` : ''}</span>${poss}`;
-  }).replace(/\bQB (<span class="pn")/g, '$1');
+  }).replace(/\b(?:[A-Z][A-Za-z0-9]+ )?QB (<span class="pn")/g, '$1');
 }
 const GROUP_ORDER = ['offense', 'defense', 'specialTeam', 'special teams'];
 function groupLabel(g){ g = String(g || '').toLowerCase(); return g.startsWith('off') ? 'Offense' : g.startsWith('def') ? 'Defense' : g.startsWith('spec') ? 'Special teams' : (g ? g[0].toUpperCase() + g.slice(1) : 'Players'); }
