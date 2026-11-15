@@ -61,7 +61,7 @@ h2{font-size:20px;text-transform:uppercase;letter-spacing:.06em}
 .fieldbox{position:relative;border-radius:12px;overflow:hidden;background:var(--turf);box-shadow:0 1px 0 var(--line)}
 .fieldbox svg{display:block;width:100%;height:auto}
 .fieldbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
-.fieldhint{display:none;font-size:12px;color:var(--muted);margin-top:-8px}
+.fieldhint{display:none;font-size:12px;color:var(--muted)}
 .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:16px;height:3px;border-radius:2px;display:inline-block}
@@ -162,8 +162,7 @@ details.flag .st{font-weight:500;color:var(--muted)}
 <div class="wrap">
   <div class="top">
     <h1>Field View</h1>
-    <div class="topright"><div class="status"><span class="dot" id="dot"></span><span id="statusText">Loading games…</span></div>
-      <button class="b" type="button" id="refreshBtn">Refresh now</button></div>
+    <div class="topright"><div class="status"><span class="dot" id="dot"></span><span id="statusText">Loading games…</span></div></div>
   </div>
   <div class="banner" id="banner" hidden></div>
   <div class="games" id="games" role="group" aria-label="Choose a game"></div>
@@ -174,11 +173,11 @@ details.flag .st{font-weight:500;color:var(--muted)}
     <div class="team home" id="homeBox"></div>
   </div>
 
-  <div class="lastplay"><span class="lbl" id="lpLabel">Last play</span><div class="lpbody"><p id="lastPlay">Waiting for the first snap.</p><div id="lpFlag"></div></div></div>
   <div class="flags" id="flagCount" hidden></div>
 
   <div class="fieldbox"><svg id="field" viewBox="0 0 1200 533" role="img" aria-label="Football field showing ball position and the plays of the drive"></svg></div>
   <div class="fieldhint">Swipe the field sideways to see all of it.</div>
+    <div class="lastplay"><span class="lbl" id="lpLabel">Last play</span><div class="lpbody"><p id="lastPlay">Waiting for the first snap.</p><div id="lpFlag"></div></div></div>
   <div class="fieldbar">
     <div class="legend">
       <span><i style="background:var(--los)"></i>Line of scrimmage</span>
@@ -192,6 +191,7 @@ details.flag .st{font-weight:500;color:var(--muted)}
     </div>
     <div class="btns">
       <button class="b" id="replayBtn" type="button">Replay this drive</button>
+      <button class="b" type="button" id="refreshBtn">Refresh now</button>
       <button class="b primary" id="liveBtn" type="button" hidden>Back to live</button>
     </div>
   </div>
