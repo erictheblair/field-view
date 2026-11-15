@@ -5,10 +5,10 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0b5f6b">
-<meta name="apple-mobile-web-app-title" content="Field View">
+<meta name="apple-mobile-web-app-title" content="NFL Field View">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}</style>
 </head><body>
-<title>Jaguars Field View</title>
+<title>NFL Field View</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
 <style>
@@ -190,7 +190,7 @@ details.flag .st{font-weight:500;color:var(--muted)}
 
 <div class="wrap">
   <div class="top">
-    <h1>Field View</h1>
+    <h1>NFL Field View</h1>
     <div class="topright"><div class="status"><span class="dot" id="dot"></span><span id="statusText">Loading games…</span></div></div>
   </div>
   <div class="banner" id="banner" hidden></div>
@@ -1310,8 +1310,9 @@ function pickDefault(){
   const has = id => S.events.some(e => e.id === id);
   if (S.selId && has(S.selId)) return S.selId;
   const fav = S.events.find(e => (e.competitions?.[0]?.competitors || []).some(c => c.team?.abbreviation === FAV));
-  if (fav) return fav.id;
+  // reopen the game you last picked, as long as it's on this week's schedule; otherwise start on the Jaguars
   if (saved && has(saved)) return saved;
+  if (fav) return fav.id;
   const live = S.events.find(e => e.status?.type?.state === 'in');
   return (live || S.events[0] || {}).id || null;
 }
