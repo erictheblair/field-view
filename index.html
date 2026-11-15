@@ -69,7 +69,7 @@ h2{font-size:20px;text-transform:uppercase;letter-spacing:.06em}
 button.b{font:inherit;font-size:13px;font-weight:600;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:6px 12px;cursor:pointer}
 button.b.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 button.b[hidden]{display:none}
-.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px;align-items:start}
 @media (max-width:820px){.cols{grid-template-columns:minmax(0,1fr)}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px;align-content:start;min-width:0}
 .card .sub{font-size:12px;color:var(--muted);margin-top:-6px}
@@ -138,6 +138,11 @@ details.flag .st{font-weight:500;color:var(--muted)}
 .rrow .pos{font-size:12px;color:var(--muted);font-weight:600}
 .rrow.hit{background:color-mix(in srgb,var(--fd) 18%,transparent)}
 .topright{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.card > h2{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.fold{flex:0 0 auto;background:none;border:1px solid var(--line);border-radius:8px;width:32px;height:32px;cursor:pointer;color:var(--fg);display:grid;place-items:center}
+.fold svg{width:16px;height:16px;transition:transform .2s}
+.card.collapsed .fold svg{transform:rotate(-90deg)}
+.card.collapsed > :not(h2){display:none!important}
 .empty{color:var(--muted);font-size:14px;padding:8px 0}
 .foot{font-size:12px;color:var(--muted)}
 .foot a{color:var(--accent)}
@@ -198,12 +203,12 @@ details.flag .st{font-weight:500;color:var(--muted)}
   </section>
 
   <div class="cols">
-    <section class="card">
+    <section class="card" id="drivesCard">
       <h2>Drives</h2>
       <div class="sub">Tap a drive to see it on the field.</div>
       <div class="drives" id="drives"></div>
     </section>
-    <section class="card">
+    <section class="card" id="playsCard">
       <h2 id="playsTitle">Play-by-play</h2>
       <div class="sub" id="playsSub">Newest first. Tap a play for the details.</div>
       <div class="plays" id="plays"></div>
@@ -908,7 +913,19 @@ function richText(text, M){
   }).replace(/\b(?:[A-Z][A-Za-z0-9]+ )?QB (<span class="pn")/g, '$1');
 }
 const GROUP_ORDER = ['offense', 'defense', 'specialTeam', 'special teams'];
-function groupLabel(g){ g = String(g || '').toLowerCase(); return g.startsWith('off') ? 'Offense' : g.startsWith('def') ? 'Defense' : g.startsWith('spec') ? 'Special teams' : (g ? g[0].toUpperCase() + g.slice(1) : 'Players'); }
+const GROUP_NAMES = { offense: 'Offense', defense: 'Defense', specialteam: 'Special teams', specialteams: 'Special teams',
+  injuredreserveorout: 'Injured reserve or out', injuredreserve: 'Injured reserve', practicesquad: 'Practice squad', suspended: 'Suspended', out: 'Out' };
+function groupLabel(g){
+  const raw = String(g || '');
+  const key = raw.toLowerCase().replace(/[^a-z]/g, '');
+  if (GROUP_NAMES[key]) return GROUP_NAMES[key];
+  if (!key) return 'Players';
+  // fall back: split camelCase or run-together words into a readable label
+  const words = raw.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/\b(or|and|of|the)\b/gi, ' $1 ').replace(/\s+/g, ' ').trim().toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+const GROUP_SORT = ['Offense', 'Defense', 'Special teams', 'Practice squad', 'Injured reserve', 'Injured reserve or out', 'Suspended', 'Out'];
+const gIdx = k => { const i = GROUP_SORT.indexOf(k); return i < 0 ? 99 : i; };
 function renderRoster(M){
   const tabs = $('rtabs');
   if (!S.rTeam || !M.byId[S.rTeam]) S.rTeam = (Object.values(M.byId).find(t => t.abbr === FAV) || M.away).id;
@@ -927,7 +944,7 @@ function renderRoster(M){
   const tcol = readable(t);
   const groups = {};
   list.forEach(a => { const k = groupLabel(a.group); (groups[k] = groups[k] || []).push(a); });
-  box.innerHTML = Object.keys(groups).sort((a, b) => ['Offense','Defense','Special teams'].indexOf(a) - ['Offense','Defense','Special teams'].indexOf(b)).map(k => {
+  box.innerHTML = Object.keys(groups).sort((a, b) => gIdx(a) - gIdx(b)).map(k => {
     const rows = groups[k].slice().sort((a, b) => (+a.jersey || 999) - (+b.jersey || 999)).map(a => {
       const hit = q && (a.full.toLowerCase().includes(q) || String(a.jersey) === q);
       if (q && !hit) return '';
@@ -1151,6 +1168,20 @@ $('refreshBtn').onclick = async () => {
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => S.M && render()); new MutationObserver(() => S.M && render()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) {}
 svg.addEventListener('click', e => { if (S.selPlay && !e.target.closest('#field g g')) { S.selPlay = null; render(); } });
 document.addEventListener('click', e => { if (S.selPlay && !S.popOpen && !e.target.closest('.play, #field, #pop, .drive, button')) { S.selPlay = null; render(); } });
+// collapsible sections, remembered per browser
+document.querySelectorAll('section.card[id]').forEach(card => {
+  const h = card.querySelector(':scope > h2'); if (!h) return;
+  const title = document.createElement('span'); while (h.firstChild) title.appendChild(h.firstChild);
+  if (h.id) { title.id = h.id; h.removeAttribute('id'); }
+  h.appendChild(title);
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'fold';
+  b.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>';
+  const key = 'fv-fold-' + card.id;
+  const set = c => { card.classList.toggle('collapsed', c); b.setAttribute('aria-expanded', String(!c)); b.setAttribute('aria-label', (c ? 'Show ' : 'Hide ') + title.textContent); };
+  set(store.get(key) === '1');
+  b.onclick = () => { const c = !card.classList.contains('collapsed'); set(c); store.set(key, c ? '1' : '0'); };
+  h.appendChild(b);
+});
 drawStatic();
 setStatus('Loading games…', false);
 tick();
