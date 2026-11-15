@@ -80,6 +80,10 @@ h2{font-size:20px;text-transform:uppercase;letter-spacing:.06em}
 .fieldbox svg{display:block;width:100%;height:auto}
 .fieldbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
 .fieldhint{display:none;font-size:12px;color:var(--muted)}
+.weekbar{display:flex;align-items:center;gap:10px;margin-bottom:-8px}
+.weekbar .wlbl{font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;font-weight:700;font-size:13px;color:var(--muted)}
+.wbtn{font:inherit;font-size:13px;font-weight:600;background:var(--panel);border:1px solid var(--line);color:var(--accent);border-radius:999px;padding:3px 12px;cursor:pointer}
+.chip .tv{color:var(--muted);font-size:11px}
 .followbtn{font:inherit;font-size:12px;font-weight:700;color:#fff;background:var(--accent);border:0;border-radius:999px;padding:3px 10px;margin-left:6px;cursor:pointer}
 .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
@@ -268,6 +272,7 @@ body.theater .tvpop.back{bottom:7.5%}
     <div class="topright"><button class="b" id="tvBtn" type="button" title="Full-screen view for your TV">📺 Theater</button><div class="status"><span class="dot" id="dot"></span><span id="statusText">Loading games…</span></div></div>
   </div>
   <div class="banner" id="banner" hidden></div>
+  <div class="weekbar"><span class="wlbl" id="weekLbl"></span><button type="button" class="wbtn" id="weekBtn" hidden>Next week →</button></div>
   <div class="games" id="games" role="group" aria-label="Choose a game"></div>
 
   <div class="bug" id="bug">
@@ -881,7 +886,7 @@ function render(){
 
 function renderChips(){
   const box = $('games');
-  if (!S.events.length) { box.innerHTML = ''; return; }
+  if (!S.events.length) { box.innerHTML = S.weekOffset ? '<div class="empty">No games are listed for next week yet.</div>' : ''; return; }
   const keep = box.scrollLeft;
   box.innerHTML = '';
   const rank = { in: 0, pre: 1, post: 2 };
@@ -907,7 +912,8 @@ function renderChips(){
       const win = lead === t, trophy = win && state === 'post';
       return `<span class="tr${win ? ' win' : ''}"><span>${esc(t.team?.abbreviation || '?')}${trophy ? ' 🏆' : ''}</span>${state === 'pre' ? '' : `<span>${esc(sc)}</span>`}</span>`;
     };
-    b.innerHTML = `<span class="ctop">${top}</span>${row(a, a.score)}${row(h, h.score)}`;
+    const tv = state === 'pre' ? (c.broadcasts || []).map(x => x.media?.shortName || (x.names || [])[0]).filter(Boolean)[0] || (c.geoBroadcasts || []).map(x => x.media?.shortName).filter(Boolean)[0] : '';
+    b.innerHTML = `<span class="ctop">${top}</span>${row(a, a.score)}${row(h, h.score)}${tv ? `<span class="tv">📺 ${esc(tv)}</span>` : ''}`;
     const label = state === 'post' ? `Final: ${a.team?.displayName || a.team?.abbreviation} ${a.score}, ${h.team?.displayName || h.team?.abbreviation} ${h.score}` :
       state === 'in' ? `Live: ${a.team?.abbreviation} ${a.score}, ${h.team?.abbreviation} ${h.score}, ${e.status?.type?.shortDetail || ''}` : `${a.team?.abbreviation} at ${h.team?.abbreviation}, ${day}`;
     b.setAttribute('aria-label', label);
@@ -1587,8 +1593,18 @@ async function loadSummary(){
 async function tick(){
   clearTimeout(S.timer);
   try {
-    const sb = await getJSON(`${API}/scoreboard?_=${Math.floor(Date.now() / 5000)}`);
+    const bust = `_=${Math.floor(Date.now() / 5000)}`;
+    let sb;
+    if (S.weekOffset && S.week) {
+      const w = S.week;
+      sb = await getJSON(`${API}/scoreboard?seasontype=${w.type}&week=${w.num + 1}&dates=${w.year}&${bust}`);
+      if (!(sb.events || []).length && w.type === 2) sb = await getJSON(`${API}/scoreboard?seasontype=3&week=1&dates=${w.year}&${bust}`);
+    } else {
+      sb = await getJSON(`${API}/scoreboard?${bust}`);
+      if (sb.week?.number && sb.season?.year) S.week = { num: +sb.week.number, type: +(sb.season.type || 2), year: +sb.season.year };
+    }
     S.events = sb.events || [];
+    renderWeekBar(sb);
     S.selId = pickDefault();
     await loadSummary();
     S.lastOk = Date.now();
@@ -1604,6 +1620,16 @@ async function tick(){
     S.timer = setTimeout(tick, 15000);
   }
 }
+
+/* ---------- this week / next week ---------- */
+function renderWeekBar(sb){
+  const n = sb?.week?.number, post = (sb?.season?.type || (S.week && S.week.type)) === 3;
+  const lbl = n ? (post ? 'Playoffs, round ' + n : 'Week ' + n) : '';
+  $('weekLbl').textContent = S.weekOffset ? (lbl ? lbl + ' · upcoming' : 'Next week') : (lbl ? lbl + ' · this week' : '');
+  $('weekBtn').hidden = !S.week || S.demo;
+  $('weekBtn').textContent = S.weekOffset ? '← This week' : 'Next week →';
+}
+$('weekBtn').onclick = () => { S.weekOffset = S.weekOffset ? 0 : 1; S.selId = null; S.summary = null; S.viewDrive = null; S.selPlay = null; $('weekBtn').disabled = true; tick().finally(() => { $('weekBtn').disabled = false; }); };
 
 /* ---------- example data (used only when ESPN can't be reached) ---------- */
 function startDemo(){
