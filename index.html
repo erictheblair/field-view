@@ -247,7 +247,7 @@ details.flag .st{font-weight:500;color:var(--muted)}
   </div>
   <section class="card" id="newsCard">
     <h2>Headlines</h2>
-    <div class="sub">Latest news about this game and both teams, from ESPN. Opens in a new tab.</div>
+    <div class="sub">Stories about the two teams in the game you are viewing, from ESPN. Opens in a new tab.</div>
     <div class="news" id="news"><div class="empty">Loading headlines…</div></div>
   </section>
 
@@ -1059,20 +1059,37 @@ $('rsearch').addEventListener('input', () => S.M && renderRoster(S.M));
 const NEWS = { key: null, at: 0, items: null };
 function ago(iso){ const t = Date.parse(iso); if (!t) return ''; const m = Math.round((Date.now() - t) / 60000);
   return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : `${Math.round(m / 1440)} days ago`; }
-function normArticles(list, team){
+function normArticles(list){
   return (list || []).filter(a => a && a.headline).map(a => ({ headline: a.headline, desc: a.description || '', when: a.published || a.lastModified || '',
-    url: a.links?.web?.href || a.links?.mobile?.href || a.link || '', img: (a.images || [])[0]?.url || '', team }));
+    url: a.links?.web?.href || a.links?.mobile?.href || a.link || '', img: (a.images || [])[0]?.url || '',
+    teamIds: (a.categories || []).map(c => String(c.teamId ?? c.team?.id ?? '')).filter(Boolean) }));
+}
+// Which of the two teams (if any) a story is about: ESPN tags stories with team categories;
+// fall back to the team's name or city appearing in the headline or summary.
+function storyTeam(a, M){
+  for (const t of [M.away, M.home]) if (a.teamIds.includes(t.id)) return t;
+  const txt = (a.headline + ' ' + a.desc).toLowerCase();
+  for (const t of [M.away, M.home]) {
+    const words = [t.name, (t.full || '').replace(new RegExp(t.name + '$'), '').trim()].filter(w => w && w.length > 3);
+    if (words.some(w => txt.includes(w.toLowerCase()))) return t;
+  }
+  return null;
 }
 async function loadNews(M){
   const key = S.selId + ':' + M.away.id + ':' + M.home.id;
   if (NEWS.key === key && Date.now() - NEWS.at < 10 * 60000) return;
   NEWS.key = key; NEWS.at = Date.now();
-  let items = normArticles(S.summary?.news?.articles || S.summary?.article && [S.summary.article]);
-  if (items.length < 4 && !S.demo) {
+  // ESPN's game page "news" is often general NFL headlines, so pull each team's own news too
+  // and keep only stories that are about one of the two teams in this game.
+  let items = normArticles(S.summary?.news?.articles || (S.summary?.article && [S.summary.article]));
+  if (!S.demo) {
     for (const t of [M.away, M.home]) {
-      try { const j = await getJSON(`${API}/news?team=${t.id}&limit=6`); items = items.concat(normArticles(j.articles, t)); } catch (e) {}
+      for (const url of [`${API}/news?team=${t.id}&limit=15`, `${API}/teams/${t.id}/news?limit=15`]) {
+        try { const j = await getJSON(url); items = items.concat(normArticles(j.articles)); } catch (e) {}
+      }
     }
   }
+  items = items.map(a => ({ ...a, team: storyTeam(a, M) })).filter(a => a.team);
   const seen = new Set();
   NEWS.items = items.filter(a => { const k = a.headline.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
     .sort((a, b) => (Date.parse(b.when) || 0) - (Date.parse(a.when) || 0)).slice(0, 8);
@@ -1096,7 +1113,7 @@ function renderNews(M){
   renderTicker(M);
   const box = $('news');
   if (NEWS.items === null) { box.innerHTML = '<div class="empty">Loading headlines…</div>'; return; }
-  if (!NEWS.items.length) { box.innerHTML = `<div class="empty">${S.demo ? 'Headlines show up here on the live site.' : 'No headlines from ESPN right now.'}</div>`; return; }
+  if (!NEWS.items.length) { box.innerHTML = `<div class="empty">${S.demo ? 'Headlines show up here on the live site.' : `No ${esc(M.away.name)} or ${esc(M.home.name)} headlines from ESPN right now.`}</div>`; return; }
   box.innerHTML = NEWS.items.map(a => {
     const t = a.team ? (M.byId[a.team.id] || a.team) : null;
     const inner = `${a.img ? `<img src="${esc(a.img)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;noimg&quot;></div>'">` : '<div class="noimg"></div>'}
