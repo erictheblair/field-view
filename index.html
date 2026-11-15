@@ -157,7 +157,7 @@ details.flag .st{font-weight:500;color:var(--muted)}
 .rrow .no{font-family:var(--display);font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;text-align:center;color:var(--tfg);background:var(--tcol);border-radius:6px;padding:1px 0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
 .rrow .pos{font-size:12px;color:var(--muted);font-weight:600}
 .rrow.hit{background:color-mix(in srgb,var(--fd) 18%,transparent)}
-.topright{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.topright{display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex-direction:row-reverse}
 .card > h2{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .fold{flex:0 0 auto;background:none;border:1px solid var(--line);border-radius:8px;width:32px;height:32px;cursor:pointer;color:var(--fg);display:grid;place-items:center}
 .fold svg{width:16px;height:16px;transition:transform .2s}
@@ -244,7 +244,7 @@ body.theater .tvpop.calm{opacity:.82}
 <div class="wrap">
   <div class="top">
     <h1>NFL Field View</h1>
-    <div class="topright"><div class="status"><span class="dot" id="dot"></span><span id="statusText">Loading games…</span></div></div>
+    <div class="topright"><button class="b" id="tvBtn" type="button" title="Full-screen view for your TV">📺 Theater</button><div class="status"><span class="dot" id="dot"></span><span id="statusText">Loading games…</span></div></div>
   </div>
   <div class="banner" id="banner" hidden></div>
   <div class="games" id="games" role="group" aria-label="Choose a game"></div>
@@ -275,7 +275,6 @@ body.theater .tvpop.calm{opacity:.82}
       <span><i style="background:repeating-linear-gradient(90deg,#d7a22a 0 3px,transparent 3px 7px)"></i>Kick (field goal, extra point, punt)</span>
     </div>
     <div class="btns">
-      <button class="b" id="tvBtn" type="button" title="Full-screen view for your TV">📺 Theater</button>
       <button class="b" id="replayBtn" type="button">Replay this drive</button>
       <button class="b icon" type="button" id="refreshBtn" aria-label="Refresh now" title="Refresh now"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg></button>
       <button class="b primary" id="liveBtn" type="button" hidden>Back to live</button>
