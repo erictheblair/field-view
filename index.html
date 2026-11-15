@@ -199,7 +199,8 @@ details.flag .st{font-weight:500;color:var(--muted)}
   <section class="card" id="keyCard" hidden>
     <h2>Key moments</h2>
     <div class="sub">Scores, turnovers and big plays, newest first. Tap one for the details.</div>
-    <div class="plays" id="keys" style="max-height:340px"></div>
+    <div class="plays" id="keys"></div>
+    <div class="sub" id="keysMore" hidden style="margin:0"></div>
   </section>
 
   <div class="cols">
@@ -732,6 +733,13 @@ function renderKeys(M){
     b.onclick = () => { stopReplay(); if (p.s) { S.selPlay = p.id; S.viewDrive = D.id === M.currentDriveId && M.state === 'in' ? null : D.id; render(); } openPlay(p, D); };
     wrap.appendChild(b); box.appendChild(wrap);
   });
+  // show about three moments, scroll inside the panel for the rest
+  const rows = [...box.children];
+  if (rows.length > 3) {
+    const h = rows.slice(0, 3).reduce((a, r) => a + r.offsetHeight, 0);
+    box.style.maxHeight = h ? (h + 14) + 'px' : '230px';
+    $('keysMore').hidden = false; $('keysMore').textContent = `Scroll for ${rows.length - 3} more`;
+  } else { box.style.maxHeight = ''; $('keysMore').hidden = true; }
 }
 
 function renderPlays(M){
