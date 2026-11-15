@@ -114,6 +114,15 @@ button.b.spin svg{animation:spin .8s linear infinite}
 .fdtag{display:inline-block;font-weight:800;font-size:10px;letter-spacing:.06em;color:#111;background:#facc15;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.3);border-radius:999px;padding:1px 8px;margin-left:8px;vertical-align:1px;white-space:nowrap}
 .flags{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);align-items:center}
 .flags b{color:var(--fg);font-variant-numeric:tabular-nums}
+.flags .flbl{display:inline-flex;align-items:center;gap:6px}
+.flags .fteam{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.flags .fteam i{width:9px;height:9px;border-radius:50%;background:var(--tc);box-shadow:0 0 0 1.5px color-mix(in srgb,var(--fg) 45%,transparent)}
+@media (max-width:560px){
+  .flags{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .flags .flbl{grid-column:1/-1}
+  .flags .fteam{display:grid;grid-template-columns:auto 1fr;column-gap:6px;row-gap:1px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 10px;color:var(--fg);font-weight:600}
+  .flags .fteam > span{grid-column:2;font-weight:400;color:var(--muted)}
+}
 .flagic{display:inline-block;width:12px;height:14px;background:linear-gradient(var(--fd),var(--fd)) 0 0/12px 9px no-repeat,linear-gradient(var(--fg),var(--fg)) 0 0/2px 14px no-repeat;vertical-align:-2px;flex:0 0 auto}
 .play{grid-template-columns:1fr}
 .playmain{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;background:none;border:0;color:inherit;font:inherit;text-align:left;padding:0;cursor:pointer;width:100%}
@@ -818,7 +827,7 @@ function render(){
   allPlays.forEach(p => (p.flags || []).forEach(f => { if (f.status === 'accepted' && tally[f.team]) { tally[f.team].n++; tally[f.team].y += f.yards || 0; } }));
   const anyFlags = M.state !== 'pre' && allPlays.length;
   $('flagCount').hidden = !anyFlags;
-  if (anyFlags) $('flagCount').innerHTML = `<span class="flagic"></span><span>Penalties so far</span>` + [M.away, M.home].map(t => `<span>${esc(t.name)} <b>${tally[t.abbr].n}</b> for <b>${tally[t.abbr].y}</b> yds</span>`).join('');
+  if (anyFlags) $('flagCount').innerHTML = `<span class="flbl"><span class="flagic"></span>Penalties so far</span>` + [M.away, M.home].map(t => `<span class="fteam" style="--tc:${t.color}"><i></i>${esc(t.name)} <span><b>${tally[t.abbr].n}</b> for <b>${tally[t.abbr].y}</b> yds</span></span>`).join('');
 
   // which drive is on the field
   if (!S.replay) {
