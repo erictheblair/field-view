@@ -164,6 +164,8 @@ details.flag .st{font-weight:500;color:var(--muted)}
   .top h1{font-size:24px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@keyframes tdpulse{0%,100%{opacity:.55}50%{opacity:1}}
+.tdglow{animation:tdpulse 1.8s ease-in-out infinite}
 .ballg{transition:transform .9s cubic-bezier(.4,.1,.2,1)}
 .lineg{transition:transform .9s cubic-bezier(.4,.1,.2,1)}
 </style>
@@ -484,6 +486,9 @@ function el(tag, attrs, parent){ const n = document.createElementNS(NS, tag); fo
 function drawStatic(){
   svg.innerHTML = '';
   const defs = el('defs', {}, svg);
+  const glow = el('filter', { id: 'tdglow', filterUnits: 'userSpaceOnUse', x: -50, y: -50, width: 1300, height: 633 }, defs);
+  el('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: 9, result: 'b' }, glow);
+  const fm = el('feMerge', {}, glow); el('feMergeNode', { in: 'b' }, fm); el('feMergeNode', { in: 'b' }, fm); el('feMergeNode', { in: 'SourceGraphic' }, fm);
   [['w','#ffffff'],['l','#ff8a7a'],['s','#f5c542'],['t','#ff4d4d'],['p','#e9d98a']].forEach(([k,c]) => {
     const m = el('marker', { id: 'ah-' + k, viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 4, markerHeight: 4, orient: 'auto-start-reverse' }, defs);
     el('path', { d: 'M0,0 L10,5 L0,10 z', fill: c }, m);
@@ -544,7 +549,16 @@ const KC = { w: '#ffffff', l: '#ff8a7a', s: '#f5c542', t: '#ff4d4d', p: '#e9d98a
 function drawDrive(D, M, uptoIdx){
   S.dyn.innerHTML = '';
   if (!D) return null;
-  let list = D.plays.filter(p => p.drawable);
+  // attach a separately-reported extra point / 2-point try to the touchdown before it
+  D.plays.forEach((p, i) => {
+    if (!p.isTD) return;
+    const nx = D.plays.slice(i + 1).find(q => !SKIP.test(q.type));
+    if (!nx) return;
+    if (p.pat) { if (nx.kickType === 'xp' || /two-point/i.test(nx.type + ' ' + nx.text)) nx.mergedTry = true; return; }
+    if (nx.kickType === 'xp') { p.pat = nx.kickGood ? 'Extra point good' : 'Extra point missed'; nx.mergedTry = true; }
+    else if (/two-point/i.test(nx.type + ' ' + nx.text)) { p.pat = /succeeds|good/i.test(nx.text) && !/fail|no good/i.test(nx.text) ? '2-point try good' : '2-point try failed'; nx.mergedTry = true; }
+  });
+  let list = D.plays.filter(p => p.drawable && !p.mergedTry);
   if (uptoIdx !== undefined) list = list.slice(0, uptoIdx + 1);
   const n = list.length; if (!n) return null;
   const top = 105, bot = 430;
@@ -590,8 +604,23 @@ function drawDrive(D, M, uptoIdx){
       el('path', { d: 'M1,0 L18,5 L1,11 z', fill: '#facc15', stroke: '#111', 'stroke-width': 1 }, fg);
     }
     if (p.isTD && !p.kickType) {
-      const tl = el('text', { x: x2 + (x2 >= x1 ? -4 : 4), y: y - 14, fill: '#f5c542', 'font-size': 15, 'font-family': 'Inter, sans-serif', 'font-weight': 800, 'text-anchor': x2 >= x1 ? 'end' : 'start', 'paint-order': 'stroke', stroke: 'rgba(0,0,0,.6)', 'stroke-width': 4 }, g);
-      tl.textContent = 'TOUCHDOWN' + (p.pat ? ' · ' + p.pat.toLowerCase() : '');
+      // glowing arrow, then point badges in the end zone: +6, then +1 / +2 / +0 for the try
+      const glowLine = el('line', { x1, x2, y1: y, y2: y, stroke: '#ffe066', 'stroke-width': 18, 'stroke-linecap': 'round', filter: 'url(#tdglow)', class: 'tdglow' }, g);
+      g.insertBefore(glowLine, g.firstChild.nextSibling);
+      const dir = x2 >= x1 ? 1 : -1;
+      const ezx = dir > 0 ? X(105) : X(-5);
+      const badge = (cx, txt, fill, fg) => { el('rect', { x: cx - 26, y: y - 15, width: 52, height: 30, rx: 15, fill, stroke: 'rgba(0,0,0,.45)', 'stroke-width': 1.5 }, g);
+        const t = el('text', { x: cx, y: y + 1, fill: fg, 'font-size': 17, 'font-weight': 800, 'font-family': 'Inter, sans-serif', 'text-anchor': 'middle', 'dominant-baseline': 'middle' }, g); t.textContent = txt; };
+      badge(ezx, '+6', '#f5c542', '#111');
+      if (p.pat) {
+        const good = /good/i.test(p.pat) && !/fail|miss/i.test(p.pat);
+        const pts = /2-point/i.test(p.pat) ? 2 : 1;
+        badge(ezx, good ? '+' + pts : '+0', good ? '#fff4c2' : '#475569', good ? '#111' : '#fff');
+        // stack the try badge just above the +6
+        const last2 = [...g.childNodes].slice(-2); last2.forEach(n => n.setAttribute(n.tagName === 'rect' ? 'y' : 'y', n.tagName === 'rect' ? (y - 51) : (y - 35)));
+      }
+      const tl = el('text', { x: x2 - dir * 4, y: y - 16, fill: '#ffd54a', 'font-size': 16, 'font-family': 'Inter, sans-serif', 'font-weight': 800, 'text-anchor': dir > 0 ? 'end' : 'start', 'paint-order': 'stroke', stroke: 'rgba(0,0,0,.6)', 'stroke-width': 4, 'letter-spacing': 1 }, g);
+      tl.textContent = 'TOUCHDOWN!';
     }
     if (p.ddt && lane >= 20) {
       const left = x2 >= x1;
