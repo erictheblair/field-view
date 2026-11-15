@@ -109,7 +109,8 @@ button.b.spin svg{animation:spin .8s linear infinite}
 .play .txt{font-size:13.5px}
 .play.sel{background:color-mix(in srgb,var(--fd) 16%,transparent)}
 .play.scoring .txt{font-weight:600}
-.fdtag{display:inline-block;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#111;background:#facc15;border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:1px}
+.fdtag{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#facc15;color:#111;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);font-weight:800;font-size:11px;line-height:1;margin-left:8px;vertical-align:middle}
+.fdtag sup{font-size:7px;line-height:1;position:relative;top:-3px;margin-left:.5px}
 .flags{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);align-items:center}
 .flags b{color:var(--fg);font-variant-numeric:tabular-nums}
 .flagic{display:inline-block;width:12px;height:14px;background:linear-gradient(var(--fd),var(--fd)) 0 0/12px 9px no-repeat,linear-gradient(var(--fg),var(--fg)) 0 0/2px 14px no-repeat;vertical-align:-2px;flex:0 0 auto}
@@ -228,7 +229,7 @@ details.flag .st{font-weight:500;color:var(--muted)}
       <span><i style="background:#f5c542"></i>Score</span>
       <span><i style="background:#ff4d4d"></i>Turnover</span>
       <span><span class="flagic"></span>Penalty flag</span>
-      <span><span class="fdtag" style="margin:0">1st down</span>First down earned</span>
+      <span><span class="fdtag" style="margin:0;width:18px;height:18px;font-size:9px">1<sup>st</sup></span>First down earned</span>
       <span><i style="background:repeating-linear-gradient(90deg,#d7a22a 0 3px,transparent 3px 7px)"></i>Kick (field goal, extra point, punt)</span>
     </div>
     <div class="btns">
@@ -655,16 +656,20 @@ function drawDrive(D, M, uptoIdx){
     }
     if (p.firstDown) {
       // pill just past the arrowhead on the same row (flips side near the edge), plus a tick at the spot
-      const dir = x2 >= x1 ? 1 : -1, gap = i === n - 1 ? 28 : 14, w = 78;
+      const dir = x2 >= x1 ? 1 : -1, r = 14, gap = (i === n - 1 ? 30 : 12) + r;
       let side = dir;
-      if (side > 0 && x2 + gap + w > X(110)) side = -1;
-      if (side < 0 && x2 - gap - w < X(-10)) side = 1;
-      const px = side > 0 ? x2 + gap : x2 - gap - w;
+      if (side > 0 && x2 + gap + r > X(110) - 6) side = -1;
+      if (side < 0 && x2 - gap - r < X(-10) + 6) side = 1;
+      const cx = x2 + side * gap;
       el('line', { x1: x2, x2: x2, y1: y - 11, y2: y + 11, stroke: '#facc15', 'stroke-width': 3 }, g);
       const tg = el('g', { opacity: S.selPlay && !sel ? .45 : 1 }, S.tagG);
-      el('rect', { x: px, y: y - 11, width: w, height: 22, rx: 11, fill: '#facc15', stroke: '#111', 'stroke-width': 1.5 }, tg);
-      const ft = el('text', { x: px + w / 2, y: y + 1, fill: '#111', 'font-size': 13, 'font-weight': 800, 'font-family': 'Inter, sans-serif', 'text-anchor': 'middle', 'dominant-baseline': 'middle', 'letter-spacing': '.04em' }, tg);
-      ft.textContent = '1ST DOWN';
+      el('circle', { cx, cy: y + 1.5, r: r + 1, fill: 'rgba(0,0,0,.3)' }, tg);
+      el('circle', { cx, cy: y, r, fill: '#facc15', stroke: '#fff', 'stroke-width': 2.5 }, tg);
+      el('circle', { cx, cy: y, r: r - 3.5, fill: 'none', stroke: 'rgba(0,0,0,.25)', 'stroke-width': 1 }, tg);
+      const ft = el('text', { x: cx - 0.5, y: y + 5, fill: '#111', 'font-size': 15, 'font-weight': 800, 'font-family': 'Inter, sans-serif', 'text-anchor': 'middle' }, tg);
+      el('tspan', {}, ft).textContent = '1';
+      el('tspan', { 'font-size': 8.5, dy: -6 }, ft).textContent = 'st';
+      el('title', {}, tg).textContent = 'First down';
     }
     if (p.isTD && !p.kickType) {
       // glowing arrow, then point badges in the end zone: +6, then +1 / +2 / +0 for the try
@@ -906,7 +911,7 @@ function renderPlays(M){
     wrap.className = 'play' + (p.id === S.selPlay ? ' sel' : '') + (p.scoring ? ' scoring' : '');
     const b = document.createElement('button'); b.type = 'button'; b.className = 'playmain';
     b.innerHTML = `<div class="when">${p.period ? qtr(p.period) : ''} ${esc(p.clock)}</div>
-      <div>${p.ddt || p.firstDown ? `<div class="sit">${esc(p.ddt || '')}${p.firstDown ? ' <span class="fdtag">1st down</span>' : ''}</div>` : ''}<div class="txt">${richText(describe(p, M), M)}</div></div>`;
+      <div>${p.ddt || p.firstDown ? `<div class="sit">${esc(p.ddt || '')}${p.firstDown ? ' <span class="fdtag" title="First down">1<sup>st</sup></span>' : ''}</div>` : ''}<div class="txt">${richText(describe(p, M), M)}</div></div>`;
     b.onclick = () => { stopReplay(); if (p.s) { S.selPlay = p.id; if (D.id !== M.currentDriveId) S.viewDrive = D.id; render(); } openPlay(p, D); };
     wrap.appendChild(b);
     if (p.flags && p.flags.length) wrap.insertAdjacentHTML('beforeend', p.flags.map((f, i) => flagDetails(f, M, p.id + ':' + i)).join(''));
