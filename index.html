@@ -10,7 +10,7 @@
 :root{
   --bg:#eef2f1; --panel:#ffffff; --fg:#14201d; --muted:#5b6b67; --line:#d5dedb;
   --accent:#006778; --gold:#d7a22a; --warn:#c2410c;
-  --turf:#2f7a3d; --turf2:#2a7038; --chalk:rgba(255,255,255,.88);
+  --turf:#2f7a3d; --turf2:#2a7038; --chalk:rgba(255,255,255,.3);--chalknum:rgba(255,255,255,.22);
   --los:#3b82f6; --fd:#facc15;
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -21,6 +21,7 @@
 :root[data-theme="dark"]{
   --bg:#0d1514; --panel:#15201e; --fg:#e7efed; --muted:#93a6a1; --line:#25332f;
   --accent:#2fb3c4; --gold:#e6b545; --warn:#fb923c; --turf:#245f30; --turf2:#20562b; color-scheme:dark}
+[hidden]{display:none!important}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45}
 .wrap{max-width:1180px;margin:0 auto;padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
 h1,h2{font-family:var(--display);font-weight:700;letter-spacing:.02em;margin:0;text-wrap:balance}
@@ -104,6 +105,24 @@ details.flag .st{font-weight:500;color:var(--muted)}
 .lpflag{margin-top:6px;font-size:13px;display:flex;gap:8px;align-items:flex-start}
 .lastplay{flex-wrap:wrap}
 .lastplay .lpbody{min-width:0;flex:1 1 300px}
+.pop{position:fixed;inset:0;z-index:50;background:rgba(8,14,13,.55);display:grid;place-items:center;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.popcard{background:var(--panel);color:var(--fg);border-radius:14px;width:min(520px,100%);max-height:100%;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.35);display:grid}
+.pophead{display:flex;gap:12px;align-items:center;padding:14px 16px;color:#fff}
+.pophead .badge{width:44px;height:44px;font-size:15px}
+.pophead h3{margin:0;font-family:var(--display);font-size:24px;font-weight:700;line-height:1.1;text-wrap:balance}
+.pophead small{display:block;opacity:.85;font-size:12px}
+.popx{margin-left:auto;background:rgba(0,0,0,.25);border:0;color:#fff;width:34px;height:34px;border-radius:50%;font-size:20px;cursor:pointer;flex:0 0 auto}
+.popbody{padding:14px 16px 16px;display:grid;gap:12px}
+.popgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.popgrid div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.popgrid span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.popgrid b{font-family:var(--display);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.poptext{margin:0;font-size:15px}
+.popmini{height:26px;border-radius:6px;background:var(--turf);position:relative;overflow:hidden}
+.popmini i{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.35)}
+.popmini em{position:absolute;top:11px;height:4px;border-radius:2px}
+.popmini u{position:absolute;top:6px;width:14px;height:14px;border-radius:50%;margin-left:-7px;border:2px solid #fff}
+.popact{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 .empty{color:var(--muted);font-size:14px;padding:8px 0}
 .foot{font-size:12px;color:var(--muted)}
 .foot a{color:var(--accent)}
@@ -155,6 +174,12 @@ details.flag .st{font-weight:500;color:var(--muted)}
     </div>
   </div>
 
+  <section class="card" id="keyCard" hidden>
+    <h2>Key moments</h2>
+    <div class="sub">Scores, turnovers and big plays, newest first. Tap one for the details.</div>
+    <div class="plays" id="keys" style="max-height:340px"></div>
+  </section>
+
   <div class="cols">
     <section class="card">
       <h2>Drives</h2>
@@ -163,10 +188,11 @@ details.flag .st{font-weight:500;color:var(--muted)}
     </section>
     <section class="card">
       <h2 id="playsTitle">Play-by-play</h2>
-      <div class="sub" id="playsSub">Newest first. Tap a play to see where it started.</div>
+      <div class="sub" id="playsSub">Newest first. Tap a play for the details.</div>
       <div class="plays" id="plays"></div>
     </section>
   </div>
+  <div class="pop" id="pop" hidden role="dialog" aria-modal="true" aria-labelledby="popTitle"><div class="popcard" id="popCard"></div></div>
   <div class="foot">Live data comes from ESPN's public scoreboard feed and refreshes every 12 seconds during a game. It runs a few seconds behind TV.</div>
 </div>
 
@@ -328,7 +354,8 @@ function normPlay(p, d, M){
   let gain = num(p.statYardage);
   if (gain === null && s && e && s.tid === e.tid) gain = s.yte - e.yte;
   return {
-    id: String(p.id ?? p.playId ?? Math.random()), type, text, s, e, kick, turnover, scoring, penalty, flags, gain,
+    id: String(p.id ?? p.playId ?? Math.random()), type, text, s, e, kick, turnover, scoring, penalty, flags, gain, tid: s ? s.tid : d.tid,
+    homeScore: p.homeScore ?? null, awayScore: p.awayScore ?? null, endDdt: (p.end && (p.end.downDistanceText || p.end.shortDownDistanceText)) || '', startPt: (p.start && (p.start.possessionText || p.start.downDistanceText)) || '',
     period: num(p.period?.number ?? p.period) || null, clock: p.clock?.displayValue || '',
     ddt: (p.start && (p.start.shortDownDistanceText || p.start.downDistanceText)) || '',
     drawable: !!(s && e) && !SKIP.test(type) && !kick
@@ -367,6 +394,8 @@ function drawStatic(){
   S.ezLt = el('text', { x: 50, y: 266, fill: '#fff', 'font-size': 64, 'font-family': 'Barlow Condensed, Arial Narrow, sans-serif', 'font-weight': 700, 'text-anchor': 'middle', 'dominant-baseline': 'middle', transform: 'rotate(-90 50 266)', 'letter-spacing': 8, opacity: .9 }, svg);
   S.ezRt = el('text', { x: 1150, y: 266, fill: '#fff', 'font-size': 64, 'font-family': 'Barlow Condensed, Arial Narrow, sans-serif', 'font-weight': 700, 'text-anchor': 'middle', 'dominant-baseline': 'middle', transform: 'rotate(90 1150 266)', 'letter-spacing': 8, opacity: .9 }, svg);
   const g = el('g', { stroke: 'var(--chalk)' }, svg);
+  // goal lines stay bright so the end zones read clearly
+  [0, 100].forEach(y => el('line', { x1: X(y), x2: X(y), y1: 0, y2: 533, stroke: 'rgba(255,255,255,.75)', 'stroke-width': 4 }, svg));
   for (let y = 0; y <= 100; y += 5) el('line', { x1: X(y), x2: X(y), y1: 0, y2: 533, 'stroke-width': y % 10 ? 2 : 3 }, g);
   for (let y = 1; y < 100; y++) if (y % 5) {
     [[4,14],[519,529],[229,239],[294,304]].forEach(([a,b]) => el('line', { x1: X(y), x2: X(y), y1: a, y2: b, 'stroke-width': 2 }, g));
@@ -375,7 +404,7 @@ function drawStatic(){
   for (let y = 10; y <= 90; y += 10) {
     const lbl = String(y <= 50 ? y : 100 - y);
     [[70, 0],[478, 180]].forEach(([yy, rot]) => {
-      el('text', { x: X(y), y: yy, fill: 'var(--chalk)', 'font-size': 44, 'font-family': 'Barlow Condensed, Arial Narrow, sans-serif', 'font-weight': 600, 'text-anchor': 'middle', 'dominant-baseline': 'middle', transform: rot ? `rotate(180 ${X(y)} ${yy})` : '' }, svg).textContent = lbl;
+      el('text', { x: X(y), y: yy, fill: 'var(--chalknum)', 'font-size': 44, 'font-family': 'Barlow Condensed, Arial Narrow, sans-serif', 'font-weight': 600, 'text-anchor': 'middle', 'dominant-baseline': 'middle', transform: rot ? `rotate(180 ${X(y)} ${yy})` : '' }, svg).textContent = lbl;
     });
   }
   S.dyn = el('g', {}, svg);
@@ -421,12 +450,15 @@ function drawDrive(D, M, uptoIdx){
     const y = n === 1 ? 266 : top + i * lane;
     const k = arrowKind(p);
     const sel = S.selPlay === p.id;
-    const g = el('g', { opacity: S.selPlay && !sel ? .45 : 1 }, S.dyn);
+    const g = el('g', { opacity: S.selPlay && !sel ? .45 : 1, style: 'cursor:pointer' }, S.dyn);
+    el('rect', { x: Math.min(X(p.s.x), X(p.e.x)) - 14, y: y - 15, width: Math.abs(X(p.e.x) - X(p.s.x)) + 28, height: 30, fill: 'transparent' }, g);
+    g.addEventListener('click', () => { if (S.replay) return; S.selPlay = p.id; render(); openPlay(p, D); });
     el('circle', { cx: X(p.s.x), cy: y, r: 5, fill: KC[k] }, g);
     const x1 = X(p.s.x), x2 = X(p.e.x);
     if (Math.abs(x2 - x1) < 6) {
       el('circle', { cx: x1, cy: y, r: 9, fill: 'none', stroke: KC[k], 'stroke-width': 3 }, g);
     } else {
+      el('line', { x1, x2, y1: y, y2: y, stroke: 'rgba(0,0,0,.35)', 'stroke-width': sel ? 11 : 9, 'stroke-linecap': 'round' }, g);
       el('line', { x1, x2, y1: y, y2: y, stroke: KC[k], 'stroke-width': sel ? 7 : (i === n - 1 ? 6 : 4), 'stroke-linecap': 'round', 'stroke-dasharray': p.penalty ? '10 8' : '', 'marker-end': `url(#ah-${k})` }, g);
     }
     if (p.penalty) {
@@ -504,7 +536,9 @@ function render(){
   const allPlays = M.drives.flatMap(d => d.plays);
   const lp = M.sit.lastPlay?.text || (allPlays.length ? allPlays[allPlays.length - 1].text : '');
   $('lpLabel').textContent = M.state === 'post' ? 'Final play' : 'Last play';
-  $('lastPlay').textContent = lp || (M.state === 'pre' ? 'The game hasn\'t started yet.' : 'Waiting for the next play.');
+  const lastP = allPlays.length ? allPlays[allPlays.length - 1] : null;
+  const lpPlain = lastP && (!M.sit.lastPlay?.text || cleanText(M.sit.lastPlay.text) === cleanText(lastP.text)) ? `${quarterLong(lastP.period, lastP.clock)}: ${describe(lastP, M)}` : cleanText(lp);
+  $('lastPlay').textContent = lpPlain || (M.state === 'pre' ? 'The game hasn\'t started yet.' : 'Waiting for the next play.');
   $('lpFlag').innerHTML = parseFlags(lp).map((f, i) => flagDetails(f, M, 'lp' + i + lp.length)).join('');
   const tally = {}; [M.away, M.home].forEach(t => tally[t.abbr] = { n: 0, y: 0 });
   allPlays.forEach(p => (p.flags || []).forEach(f => { if (f.status === 'accepted' && tally[f.team]) { tally[f.team].n++; tally[f.team].y += f.yards || 0; } }));
@@ -537,6 +571,7 @@ function render(){
 
   renderDrives(M);
   renderPlays(M);
+  renderKeys(M);
 }
 
 function renderChips(){
@@ -579,6 +614,30 @@ function renderDrives(M){
   });
 }
 
+function keyTag(p){
+  if (p.scoring) return ['Score', 'var(--gold)'];
+  if (p.turnover || /intercepted|interception/i.test(p.text)) return ['Turnover', '#ef4444'];
+  if (/field goal is (no good|blocked)/i.test(p.text)) return ['Missed kick', 'var(--muted)'];
+  if (/FUMBLES/i.test(p.text)) return ['Fumble', '#ef4444'];
+  if (!p.penalty && p.gain !== null && p.gain >= 25) return ['Big play', 'var(--accent)'];
+  if (p.flags && p.flags.some(f => f.status === 'accepted' && (f.yards || 0) >= 15)) return ['Big flag', '#ca8a04'];
+  return null;
+}
+function renderKeys(M){
+  const items = [];
+  M.drives.forEach(D => D.plays.forEach(p => { const k = keyTag(p); if (k) items.push({ p, D, k }); }));
+  $('keyCard').hidden = !items.length;
+  const box = $('keys'); box.innerHTML = '';
+  items.reverse().forEach(({ p, D, k }) => {
+    const wrap = document.createElement('div'); wrap.className = 'play';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'playmain';
+    b.innerHTML = `<div class="when"><span style="display:inline-block;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#fff;background:${k[1]};border-radius:4px;padding:1px 6px">${esc(k[0])}</span></div>
+      <div><div class="sit">${esc(quarterLong(p.period, p.clock))}</div><div class="txt">${esc(describe(p, M))}</div></div>`;
+    b.onclick = () => { stopReplay(); if (p.s) { S.selPlay = p.id; S.viewDrive = D.id === M.currentDriveId && M.state === 'in' ? null : D.id; render(); } openPlay(p, D); };
+    wrap.appendChild(b); box.appendChild(wrap);
+  });
+}
+
 function renderPlays(M){
   const box = $('plays');
   const D = M.drives.find(d => d.id === S.shownDrive);
@@ -590,13 +649,198 @@ function renderPlays(M){
     wrap.className = 'play' + (p.id === S.selPlay ? ' sel' : '') + (p.scoring ? ' scoring' : '');
     const b = document.createElement('button'); b.type = 'button'; b.className = 'playmain';
     b.innerHTML = `<div class="when">${p.period ? qtr(p.period) : ''} ${esc(p.clock)}</div>
-      <div>${p.ddt ? `<div class="sit">${esc(p.ddt)}</div>` : ''}<div class="txt">${esc(p.text)}</div></div>`;
-    if (p.s) b.onclick = () => { stopReplay(); S.selPlay = (S.selPlay === p.id) ? null : p.id; if (D.id !== M.currentDriveId) S.viewDrive = D.id; render(); };
+      <div>${p.ddt ? `<div class="sit">${esc(p.ddt)}</div>` : ''}<div class="txt">${esc(describe(p, M))}</div></div>`;
+    b.onclick = () => { stopReplay(); if (p.s) { S.selPlay = p.id; if (D.id !== M.currentDriveId) S.viewDrive = D.id; render(); } openPlay(p, D); };
     wrap.appendChild(b);
     if (p.flags && p.flags.length) wrap.insertAdjacentHTML('beforeend', p.flags.map((f, i) => flagDetails(f, M, p.id + ':' + i)).join(''));
     box.appendChild(wrap);
   });
 }
+
+/* ---------- plain-English play descriptions ---------- */
+const NM = "[A-Z][A-Za-z'\\-]*\\.\\s?[A-Z][A-Za-z'\\-]+(?:\\s(?:Jr|Sr|II|III|IV)\\.?)?";
+const SP = "[A-Z]{2,4} \\d{1,2}|50";
+const R = src => new RegExp(src, 'i');
+function quarterLong(p, clock){ const q = !p ? '' : p > 4 ? 'Overtime' : ['1st','2nd','3rd','4th'][p-1] + ' quarter'; return clock ? `${q}, ${clock} left` : q; }
+function cleanText(t){
+  return String(t || '').replace(/^\s*\(\d{1,2}:\d{2}\)\s*/, '').replace(/\((?:shotgun|no huddle|pistol|punt formation|field goal formation|run formation|kick formation)[^)]*\)\s*/gi, '').replace(/\s+/g, ' ').trim();
+}
+function spotPlain(sp, M){
+  if (!sp) return '';
+  if (/^50$/.test(sp.trim())) return 'midfield';
+  const m = sp.match(/([A-Z]{2,4}) (\d{1,2})/); if (!m) return sp;
+  const t = Object.values(M.byId).find(x => x.abbr === m[1]);
+  return t ? `the ${t.name}' ${m[2]}` : sp;
+}
+const yds = n => `${n} yard${Math.abs(n) === 1 ? '' : 's'}`;
+function gainPhrase(n){ return n === null || isNaN(n) ? '' : n > 0 ? `for ${yds(n)}` : n < 0 ? `and lost ${yds(-n)}` : 'for no gain'; }
+const DIRS = { 'left end': 'around the left side', 'right end': 'around the right side', 'up the middle': 'up the middle', 'middle': 'up the middle',
+  'left guard': 'inside to the left', 'right guard': 'inside to the right', 'left tackle': 'off left tackle', 'right tackle': 'off right tackle' };
+function teamOf(abbr, M){ return Object.values(M.byId).find(x => x.abbr === abbr); }
+
+function plainPlay(p, M){
+  const t = cleanText(p.text);
+  if (!t) return '';
+  const off = M.byId[p.tid], def = Object.values(M.byId).find(x => off && x.id !== off.id);
+  const O = off ? off.name : 'The offense', Dn = def ? def.name : 'the defense';
+  const td = /TOUCHDOWN/i.test(t) && !/nullified|no play/i.test(t);
+  let out = '', m;
+  const first = () => (p.s && p.s.dist !== null && p.gain !== null && p.gain >= p.s.dist && !td && !p.penalty && p.s.tid === (p.e && p.e.tid)) ? ' First down.' : '';
+  const fumble = (who) => {
+    if (!/FUMBLES/i.test(t)) return '';
+    const f0 = t.match(R(`(${NM}) FUMBLES`)); const f = [null, f0 ? f0[1] : (who || 'The ball carrier')];
+    const r = t.match(R(`RECOVERED by ([A-Z]{2,4})-(${NM})`));
+    if (!r) return ` ${f[1]} fumbled.`;
+    const rt = teamOf(r[1].toUpperCase(), M);
+    return rt && off && rt.id !== off.id ? ` But ${f[1]} fumbled, and ${rt.name} ${r[2]} recovered it. Turnover!` : ` ${f[1]} fumbled, but the ${O} got it back.`;
+  };
+
+  if (/no play/i.test(t) && p.flags && p.flags.length) {
+    const f = p.flags[0]; const ft = teamOf(f.team, M);
+    out = `Flag before the play: ${f.name.toLowerCase()} on the ${ft ? ft.name : f.team}${f.player ? ` (${f.player})` : ''}. The play doesn't count${f.yards ? `, and it's a ${f.yards}-yard penalty` : ''}.`;
+    return out;
+  }
+  if ((m = t.match(R(`(${NM}) pass .*?(?:intended for (${NM}) )?INTERCEPTED by (${NM})(?: at (${SP}))?`)))) {
+    out = `${O} QB ${m[1]} threw${m[2] ? ' toward ' + m[2] : ''}, but ${Dn} defender ${m[3]} intercepted it${m[4] ? ' at ' + spotPlain(m[4], M) : ''}.`;
+    const ret = t.match(R(`INTERCEPTED by ${m[3].replace('.', '\\.')}.*?${m[3].replace('.', '\\.')} (?:to (${SP}) )?for (-?\\d+) yards?`));
+    if (td) out += ` He ran it all the way back for a touchdown!`;
+    else if (ret && +ret[2] > 0) out += ` He returned it ${yds(+ret[2])}${ret[1] ? ' to ' + spotPlain(ret[1], M) : ''}.`;
+    return out + ' Turnover, the ' + Dn + ' get the ball.';
+  }
+  if ((m = t.match(R(`(${NM}) sacked(?: at (${SP}))? for (-?\\d+) yards?(?: \\((${NM})\\))?`)))) {
+    out = `${O} QB ${m[1]} was sacked${m[4] ? ' by ' + m[4] : ''} and lost ${yds(Math.abs(+m[3]))}.`;
+    return out + fumble(m[1]);
+  }
+  if ((m = t.match(R(`(${NM}) pass incomplete(?: (?!to )[a-z]+)*(?: to (${NM}))?`)))) {
+    const def2 = t.match(R(`\\((${NM})\\)\\.?$`));
+    out = `${m[1]}'s pass${m[2] ? ' to ' + m[2] : ''} fell incomplete${/ \[|broken up|defended|PD/i.test(t) && def2 ? ', broken up by ' + def2[1] : ''}.`;
+    return out;
+  }
+  if ((m = t.match(R(`(${NM}) pass (?:[a-z ]*?)to (${NM})(?: to (${SP}))? (for (?:-?\\d+ yards?|no gain))`)))) {
+    const n = /no gain/i.test(m[4]) ? 0 : +m[4].match(/-?\d+/)[0];
+    out = `${m[1]} completed a pass to ${m[2]} ${gainPhrase(n)}${m[3] && !td ? ', to ' + spotPlain(m[3], M) : ''}.`;
+    if (td) out += ` Touchdown, ${O}!`;
+    return out + first() + fumble(m[2]);
+  }
+  if ((m = t.match(R(`(${NM}) scrambles(?: [a-z ]+?)?(?: to (${SP}))? (for (?:-?\\d+ yards?|no gain))`)))) {
+    const n = /no gain/i.test(m[3]) ? 0 : +m[3].match(/-?\d+/)[0];
+    out = `QB ${m[1]} took off running ${gainPhrase(n)}.`;
+    if (td) out += ` Touchdown, ${O}!`;
+    return out + first() + fumble(m[1]);
+  }
+  if ((m = t.match(R(`(${NM}) kneels`)))) return `${m[1]} took a knee to run time off the clock.`;
+  if ((m = t.match(R(`(${NM}) (\\d+) yard field goal is (GOOD|No Good|BLOCKED)`)))) {
+    const r = m[3].toUpperCase();
+    return r === 'GOOD' ? `${m[1]} made a ${m[2]}-yard field goal. 3 points, ${O}.` : r === 'BLOCKED' ? `${Dn} blocked ${m[1]}'s ${m[2]}-yard field goal try!` : `${m[1]} missed a ${m[2]}-yard field goal. No points.`;
+  }
+  if ((m = t.match(R(`(${NM}) extra point is (GOOD|No Good|BLOCKED)`)))) return /good/i.test(m[2]) && !/no good/i.test(m[2]) ? `${m[1]} made the extra point.` : `${m[1]}'s extra point ${/blocked/i.test(m[2]) ? 'was blocked' : 'missed'}.`;
+  if (/TWO-POINT CONVERSION ATTEMPT/i.test(t)) return /ATTEMPT SUCCEEDS/i.test(t) ? `The ${O} went for two and got it. 2 points!` : `The ${O} went for two but didn't get it.`;
+  if ((m = t.match(R(`(${NM}) punts (\\d+) yards? to (${SP}|end zone)`)))) {
+    out = `The ${O} punted ${yds(+m[2])} to ${m[3] === 'end zone' ? 'the end zone' : spotPlain(m[3], M)}.`;
+    const fc = t.match(R(`fair catch by (${NM})`)); const ret = t.match(R(`(${NM}) (?:to (${SP}) )?for (-?\\d+) yards?`));
+    if (/touchback/i.test(t)) out += ' Touchback.';
+    else if (fc) out += ` ${fc[1]} called for a fair catch.`;
+    else if (/downed/i.test(t)) out += ' It was downed there.';
+    else if (/out of bounds/i.test(t)) out += ' It went out of bounds.';
+    else if (ret) out += ` ${ret[1]} returned it ${yds(+ret[3])}${ret[2] ? ' to ' + spotPlain(ret[2], M) : ''}.`;
+    if (td) out += ' Returned for a touchdown!';
+    return out + fumble();
+  }
+  if ((m = t.match(R(`(${NM}) kicks (\\d+) yards? from (${SP}) to (${SP}|end zone)`)))) {
+    out = `${m[1]} kicked off ${yds(+m[2])}.`;
+    const ret = t.match(R(`(${NM}) (?:to (${SP}) )?for (-?\\d+) yards?`));
+    if (/touchback/i.test(t)) out += ' Touchback, so the drive starts at the 25.';
+    else if (ret) out += ` ${ret[1]} returned it ${yds(+ret[3])}${ret[2] ? ' to ' + spotPlain(ret[2], M) : ''}.`;
+    if (td) out += ' Returned for a touchdown!';
+    return out + fumble();
+  }
+  if ((m = t.match(R(`(${NM}) (left end|right end|left tackle|right tackle|left guard|right guard|up the middle|middle|left|right)?(?: (?:pushed ob|ran ob))?(?: at| to)? ?(${SP})? ?(for (?:-?\\d+ yards?|no gain))`)))) {
+    const n = /no gain/i.test(m[4]) ? 0 : +m[4].match(/-?\d+/)[0];
+    out = `${m[1]} ran ${m[2] ? (DIRS[m[2].toLowerCase()] || 'to the ' + m[2].toLowerCase()) + ' ' : ''}${gainPhrase(n)}.`;
+    if (td) out += ` Touchdown, ${O}!`;
+    return out + first() + fumble(m[1]);
+  }
+  // fallback: tidy original
+  out = t.replace(R(`\\b(${SP})\\b`), x => spotPlain(x, M));
+  if (td && !/touchdown/i.test(out)) out += ` Touchdown, ${O}!`;
+  return out;
+}
+function withFlagNote(p, M, base){
+  if (!p.flags || !p.flags.length || /no play/i.test(p.text)) return base;
+  const f = p.flags[0]; const ft = teamOf(f.team, M);
+  const st = f.status === 'declined' ? ', but it was declined' : f.status === 'offsetting' ? ', offset by a flag on the other team' : '';
+  return `${base} There was also a flag: ${f.name.toLowerCase()} on the ${ft ? ft.name : f.team}${st}.`;
+}
+function describe(p, M){ try { return withFlagNote(p, M, plainPlay(p, M)) || p.text; } catch (e) { return p.text; } }
+
+/* ---------- play details popup ---------- */
+function spotText(sp, M){
+  if (!sp) return '—';
+  if (sp.yte === 50) return 'Midfield (50)';
+  const off = M.byId[sp.tid], def = Object.values(M.byId).find(t => t.id !== sp.tid);
+  return sp.yte > 50 ? `${off.abbr} ${100 - sp.yte} (own side)` : `${def ? def.abbr : 'Opp'} ${sp.yte}`;
+}
+function playKind(p){
+  if (p.scoring) return 'Scoring play';
+  if (p.turnover) return 'Turnover';
+  if (/no play/i.test(p.text)) return 'Penalty, play wiped out';
+  if (p.kick) return 'Kickoff';
+  if (/punt/i.test(p.type + p.text)) return 'Punt';
+  if (/field goal/i.test(p.type + p.text)) return 'Field goal try';
+  if (/sack/i.test(p.type + p.text)) return 'Sack';
+  if (/incomplete/i.test(p.text)) return 'Incomplete pass';
+  if (/pass/i.test(p.type + p.text)) return 'Pass play';
+  if (/rush|run|left end|right end|up the middle|guard|tackle|scrambles/i.test(p.type + p.text)) return 'Running play';
+  return p.type || 'Play';
+}
+function openPlay(p, D){
+  const M = S.M; if (!M) return;
+  const t = M.byId[p.tid] || D.team || M.away;
+  const fg = lum(t.color) > .6 ? '#111' : '#fff';
+  const g = p.gain;
+  const gainTxt = g === null ? '—' : (g > 0 ? `+${g} yds` : g < 0 ? `${g} yds` : 'No gain');
+  let first = '';
+  if (p.s && p.e && p.s.tid === p.e.tid && p.s.dist !== null && !p.penalty && !p.scoring && g !== null && g >= p.s.dist) first = 'Yes';
+  else if (p.s && p.e && p.s.tid === p.e.tid && p.s.dist !== null && !p.scoring && g !== null) first = 'No';
+  const score = (p.awayScore !== null && p.homeScore !== null) ? `${M.away.abbr} ${p.awayScore} – ${M.home.abbr} ${p.homeScore}` : '';
+  let mini = '';
+  if (p.s && p.e) {
+    const a = p.s.x, b = p.e.x, k = arrowKind(p);
+    mini = `<div class="popmini" aria-hidden="true">${[10,20,30,40,50,60,70,80,90].map(v => `<i style="left:${v}%"></i>`).join('')}
+      <em style="left:${Math.min(a,b)}%;width:${Math.max(.6, Math.abs(b-a))}%;background:${KC[k]}"></em>
+      <u style="left:${a}%;background:${t.color}"></u></div>`;
+  }
+  const cells = [
+    ['When', quarterLong(p.period, p.clock) || '—'],
+    ['Down & distance', p.s && p.s.down ? `${ordinal(p.s.down)} & ${p.s.dist >= p.s.yte ? 'Goal' : p.s.dist}` : '—'],
+    ['Ball was on', spotText(p.s, M)],
+    ['Result', gainTxt],
+    ['Ended at', spotText(p.e, M)],
+  ];
+  if (first && !p.penalty) cells.push(['First down?', first]);
+  if (score) cells.push(['Score after', score]);
+  $('popCard').innerHTML = `
+    <div class="pophead" style="background:${t.color};color:${fg}">
+      <div class="badge" style="background:rgba(0,0,0,.2);color:${fg}">${esc(t.abbr)}</div>
+      <div><h3 id="popTitle">${esc(playKind(p))}</h3><small>${esc(t.name)} on offense</small></div>
+      <button class="popx" id="popX" type="button" aria-label="Close">×</button>
+    </div>
+    <div class="popbody">
+      ${mini}
+      <p class="poptext">${esc(describe(p, M))}</p>
+      <div class="sub" style="margin:0;font-size:12px;color:var(--muted)">Official play-by-play: ${esc(cleanText(p.text))}</div>
+      <div class="popgrid">${cells.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
+      ${(p.flags || []).map((f, i) => flagDetails(f, M, 'pop' + p.id + i).replace('<details class="flag"', '<details open class="flag"')).join('')}
+      <div class="popact"><button class="b primary" type="button" id="popOk">Close</button></div>
+    </div>`;
+  $('pop').hidden = false;
+  S.popOpen = true;
+  $('popOk').focus();
+  $('popX').onclick = closePop; $('popOk').onclick = closePop;
+}
+function closePop(){ $('pop').hidden = true; S.popOpen = false; }
+$('pop').addEventListener('click', e => { if (e.target.id === 'pop') closePop(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.popOpen) closePop(); });
 
 /* ---------- replay ---------- */
 function stopReplay(){ if (S.replay) { clearInterval(S.replay); S.replay = null; $('replayBtn').textContent = 'Replay this drive'; } }
@@ -618,7 +862,7 @@ function startReplay(){
     placeLines(p.s.x, p.s.dist && p.s.dist < p.s.yte ? p.s.x + dir * p.s.dist : null);
     placeBall(p.e.x, res ? res.y : 266);
     $('lpLabel').textContent = (p.ddt || 'Play').replace(/ at .*/, '');
-    $('lastPlay').textContent = p.text;
+    $('lastPlay').textContent = describe(p, M);
     $('lpFlag').innerHTML = (p.flags || []).map((f, i) => flagDetails(f, M, 'r' + p.id + i)).join('');
   }, 1700);
 }
@@ -723,6 +967,7 @@ function startDemo(){
   setTimeout(startReplay, 900);
 }
 
+window.__fv = { describe, parseFlags };
 drawStatic();
 setStatus('Loading games…', false);
 tick();
