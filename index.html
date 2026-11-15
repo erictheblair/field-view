@@ -124,11 +124,11 @@ details.flag .st{font-weight:500;color:var(--muted)}
 .popmini u{position:absolute;top:6px;width:14px;height:14px;border-radius:50%;margin-left:-7px;border:2px solid #fff}
 .popact{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 .pn{white-space:nowrap;font-weight:600}
-.pn::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--tc);box-shadow:0 0 0 1.5px var(--panel),0 0 0 2.5px var(--tc);margin:0 5px 1px 1px;vertical-align:middle}
+.pn::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--tc);box-shadow:0 0 0 1px color-mix(in srgb,var(--fg) 35%,transparent);margin:0 5px 1px 1px;vertical-align:middle}
 .pn small{font-weight:600;font-size:10px;color:var(--muted);margin-left:3px;letter-spacing:.03em}
 .rtabs{display:flex;gap:6px;flex-wrap:wrap}
 .rtab{font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:999px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-.rtab i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.rtab i{width:10px;height:10px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px color-mix(in srgb,var(--fg) 35%,transparent)}
 .rtab[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .rsearch{font:inherit;font-size:14px;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);width:100%;max-width:280px}
 .rgroups{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px 20px}
@@ -234,6 +234,20 @@ const num = v => (v === null || v === undefined || v === '' || isNaN(+v)) ? null
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const hex = c => c ? (c[0] === '#' ? c : '#' + c) : '#55615e';
 function lum(h){ h = hex(h).slice(1); if (h.length !== 6) return 0.3; const [r,g,b] = [0,2,4].map(i => parseInt(h.substr(i,2),16)/255); return 0.2126*r + 0.7152*g + 0.0722*b; }
+function rgbOf(h){ h = hex(h).slice(1); if (h.length === 3) h = h.split('').map(c => c + c).join(''); return [0,2,4].map(i => parseInt(h.substr(i,2),16) || 0); }
+function relLum(rgb){ const [r,g,b] = rgb.map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126*r + .7152*g + .0722*b; }
+function contrast(a, b){ const [x, y] = [relLum(a), relLum(b)].sort((m, n) => n - m); return (x + .05) / (y + .05); }
+function toHex(rgb){ return '#' + rgb.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join(''); }
+function pageBg(){ try { const v = getComputedStyle(document.documentElement).getPropertyValue('--panel').trim(); return v ? rgbOf(v) : [255,255,255]; } catch (e) { return [255,255,255]; } }
+// A team color that stays readable on the current page background (3:1 or better):
+// try the primary color, then the secondary, then nudge the primary darker or lighter until it reads.
+function readable(t){
+  const bg = pageBg(), want = 3;
+  for (const c of [t.color, t.alt]) if (c && contrast(rgbOf(c), bg) >= want) return hex(c);
+  const base = rgbOf(t.color), target = relLum(bg) > .5 ? [0,0,0] : [255,255,255];
+  for (let k = .1; k <= 1; k += .1) { const m = base.map((v, i) => v + (target[i] - v) * k); if (contrast(m, bg) >= want) return toHex(m); }
+  return relLum(bg) > .5 ? '#000000' : '#ffffff';
+}
 const ordinal = n => ({1:'1st',2:'2nd',3:'3rd',4:'4th'}[n] || (n + 'th'));
 const qtr = p => p > 4 ? 'OT' : 'Q' + p;
 
@@ -630,7 +644,7 @@ function renderDrives(M){
     let bar = '';
     if (D.startX !== null && D.endX !== null) {
       const l = Math.min(D.startX, D.endX), w = Math.max(1.5, Math.abs(D.endX - D.startX));
-      bar = `<b style="left:${l}%;width:${w}%;background:${D.team.color}"></b>`;
+      bar = `<b style="left:${l}%;width:${w}%;background:${readable(D.team)}"></b>`;
     }
     b.innerHTML = `<div class="row"><span><strong>${esc(D.team.abbr)}</strong> · ${D.period ? qtr(D.period) : ''} ${esc(D.clock)}</span><span class="res ${D.isScore ? 'score' : ''}">${esc(res)}</span></div>
       <div class="mini" aria-hidden="true">${bar}</div>
@@ -841,7 +855,7 @@ function richText(text, M){
     const pl = findPlayer(nm, M);
     if (!pl) return raw;
     const tip = `${pl.full}${pl.jersey !== '' ? ' #' + pl.jersey : ''}, ${pl.posName || pl.pos}, ${pl.team.full || pl.team.name}`;
-    return `<span class="pn" style="--tc:${pl.team.color}" title="${esc(tip)}">${nm}${pl.pos ? `<small>${esc(pl.team.abbr)} ${esc(pl.pos)}</small>` : ''}</span>${poss}`;
+    return `<span class="pn" style="--tc:${readable(pl.team)}" title="${esc(tip)}">${nm}${pl.pos ? `<small>${esc(pl.team.abbr)} ${esc(pl.pos)}</small>` : ''}</span>${poss}`;
   }).replace(/\bQB (<span class="pn")/g, '$1');
 }
 const GROUP_ORDER = ['offense', 'defense', 'specialTeam', 'special teams'];
@@ -852,7 +866,7 @@ function renderRoster(M){
   tabs.innerHTML = '';
   [M.away, M.home].forEach(t => {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'rtab'; b.setAttribute('aria-pressed', t.id === S.rTeam);
-    b.innerHTML = `<i style="background:${t.color}"></i>${esc(t.name)}`;
+    b.innerHTML = `<i style="background:${readable(t)}"></i>${esc(t.name)}`;
     b.onclick = () => { S.rTeam = t.id; renderRoster(M); };
     tabs.appendChild(b);
   });
@@ -861,13 +875,14 @@ function renderRoster(M){
   if (list === undefined) { box.innerHTML = '<div class="empty">Loading roster…</div>'; return; }
   if (!list || !list.length) { box.innerHTML = '<div class="empty">ESPN didn\'t send a roster for this team right now. Try Refresh now in a minute.</div>'; return; }
   const q = ($('rsearch').value || '').trim().toLowerCase();
+  const tcol = readable(t);
   const groups = {};
   list.forEach(a => { const k = groupLabel(a.group); (groups[k] = groups[k] || []).push(a); });
   box.innerHTML = Object.keys(groups).sort((a, b) => ['Offense','Defense','Special teams'].indexOf(a) - ['Offense','Defense','Special teams'].indexOf(b)).map(k => {
     const rows = groups[k].slice().sort((a, b) => (+a.jersey || 999) - (+b.jersey || 999)).map(a => {
       const hit = q && (a.full.toLowerCase().includes(q) || String(a.jersey) === q);
       if (q && !hit) return '';
-      return `<div class="rrow${hit ? ' hit' : ''}" style="--tcol:${t.color}"><span class="no">${esc(a.jersey)}</span><span>${esc(a.full)}</span><span class="pos" title="${esc(a.posName)}">${esc(a.pos)}</span></div>`;
+      return `<div class="rrow${hit ? ' hit' : ''}" style="--tcol:${tcol}"><span class="no">${esc(a.jersey)}</span><span>${esc(a.full)}</span><span class="pos" title="${esc(a.posName)}">${esc(a.pos)}</span></div>`;
     }).join('');
     return rows ? `<div class="rgroup"><h4>${esc(k)}</h4>${rows}</div>` : '';
   }).join('') || '<div class="empty">No player matches that.</div>';
@@ -1073,7 +1088,7 @@ function startDemo(){
   setTimeout(startReplay, 900);
 }
 
-window.__fv = { describe, parseFlags, richText, get M(){ return S.M; } };
+window.__fv = { describe, parseFlags, richText, readable, get M(){ return S.M; } };
 $('refreshBtn').onclick = async () => {
   const b = $('refreshBtn'); if (b.disabled) return;
   b.disabled = true; b.textContent = 'Refreshing…';
@@ -1082,6 +1097,7 @@ $('refreshBtn').onclick = async () => {
   await tick();
   b.disabled = false; b.textContent = 'Refresh now';
 };
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => S.M && render()); new MutationObserver(() => S.M && render()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) {}
 drawStatic();
 setStatus('Loading games…', false);
 tick();
