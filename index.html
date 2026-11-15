@@ -238,8 +238,8 @@ body.theater .tvpop.calm{opacity:.82}
 .tvpop .tvlive{display:inline-flex;align-items:center;gap:.45vw;font-weight:800;font-size:1vw;letter-spacing:.1em;color:#fff;background:#dc2626;border-radius:.4vw;padding:.15vw .7vw}
 .tvpop .tvlive i{width:.6vw;height:.6vw;border-radius:50%;background:#fff;animation:pulse-red 1.6s infinite}
 .tvpop .tvpast{font-weight:700;font-size:1vw;letter-spacing:.04em;color:#111;background:#cbd5d1;border-radius:.4vw;padding:.15vw .7vw}
-.tvpop .tvkeys{font-size:.85vw;color:#7d8f8a;margin-left:.6vw}
-.tvpop .tvkeys kbd{font:inherit;font-weight:700;border:1px solid #4b5a56;border-radius:.25vw;padding:0 .3vw;color:#cbd5d1}
+.tvpop .tvfoot{margin-top:.7vw;font-size:.95vw;color:#93a6a1;display:flex;align-items:center;gap:.5vw}
+.tvpop .tvfoot kbd{font:inherit;font-weight:700;font-size:.85vw;letter-spacing:.06em;border:1px solid #5b6b67;border-bottom-width:2px;border-radius:.3vw;padding:.05vw .5vw;color:#e7efed;background:rgba(255,255,255,.06)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 @keyframes tdpulse{0%,100%{opacity:.55}50%{opacity:1}}
 .tdglow{animation:tdpulse 1.8s ease-in-out infinite}
@@ -1443,11 +1443,10 @@ function tvUpdate(M, p, plain){
   else { const m = plain.match(/^((?:\d(?:st|nd|rd|th) quarter|Overtime)(?:, [\d:]+ left)?):\s*/); if (m) { when = m[1]; body = plain.slice(m[0].length); } }
   const who = M.state === 'post' ? 'Final play' : (team ? team.name : 'Last play');
   const dd = p && p.ddt ? p.ddt.replace(/ at .*/, '') : '';
-  let st = '';
-  if (TV.idx !== null) { const ahead = L.length - 1 - TV.idx; st = `<span class="tvpast">⏪ ${ahead} play${ahead === 1 ? '' : 's'} back</span><span class="tvkeys"><kbd>→</kbd> next · <kbd>Space</kbd> ${M.state === 'in' ? 'back to live' : 'latest'}</span>`; }
-  else if (M.state === 'in') st = `<span class="tvlive"><i></i>LIVE</span>${L.length > 1 ? '<span class="tvkeys"><kbd>←</kbd> earlier plays</span>' : ''}`;
-  else if (L.length > 1) st = `<span class="tvkeys"><kbd>←</kbd> earlier plays</span>`;
-  el.innerHTML = `<div class="tvhead"><span class="tvteam">${esc(who)}</span>${dd ? `<span class="tvdd">${esc(dd)}</span>` : ''}${tag}<span class="tvwhen">${st}${st && when ? '<span style="display:inline-block;width:1.2vw"></span>' : ''}${esc(when)}</span></div><div class="tvtxt">${richText(body, M)}</div>`;
+  let st = '', foot = '';
+  if (TV.idx !== null) { const ahead = L.length - 1 - TV.idx; st = `<span class="tvpast">⏪ ${ahead} play${ahead === 1 ? '' : 's'} back</span>`; foot = `<div class="tvfoot"><kbd>Space</kbd> Back to ${M.state === 'in' ? 'Live' : 'latest play'}</div>`; }
+  else if (M.state === 'in') st = `<span class="tvlive"><i></i>LIVE</span>`;
+  el.innerHTML = `<div class="tvhead"><span class="tvteam">${esc(who)}</span>${dd ? `<span class="tvdd">${esc(dd)}</span>` : ''}${tag}<span class="tvwhen">${st}${st && when ? '<span style="display:inline-block;width:1.2vw"></span>' : ''}${esc(when)}</span></div><div class="tvtxt">${richText(body, M)}</div>${foot}`;
   el.classList.add('on');
   if (id !== TV.lastId) {
     const first = TV.lastId === null; TV.lastId = id;
