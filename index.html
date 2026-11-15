@@ -80,6 +80,7 @@ h2{font-size:20px;text-transform:uppercase;letter-spacing:.06em}
 .fieldbox svg{display:block;width:100%;height:auto}
 .fieldbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
 .fieldhint{display:none;font-size:12px;color:var(--muted)}
+.followbtn{font:inherit;font-size:12px;font-weight:700;color:#fff;background:var(--accent);border:0;border-radius:999px;padding:3px 10px;margin-left:6px;cursor:pointer}
 .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:16px;height:3px;border-radius:2px;display:inline-block}
@@ -201,7 +202,7 @@ details.flag .st{font-weight:500;color:var(--muted)}
   .badge{width:40px;height:40px;font-size:15px}.score{font-size:34px}.tname{display:none}.poss{top:2px;font-size:11px}
   .team .tos{display:none}
   .fieldbox{overflow-x:auto;-webkit-overflow-scrolling:touch}.fieldbox svg{width:820px;max-width:none}
-  .fieldhint{display:block!important}
+  .fieldhint{display:flex!important;align-items:center;justify-content:space-between;gap:8px;min-height:22px}
   .team{padding:8px;gap:6px}.mid{min-width:92px;padding:6px 8px}.clock{font-size:19px}.dd{font-size:14px}
   .top h1{font-size:24px}
 }
@@ -280,7 +281,7 @@ body.theater .tvpop.back{bottom:7.5%}
 
   <div class="fieldbox"><svg id="field" viewBox="0 0 1200 533" role="img" aria-label="Football field showing ball position and the plays of the drive"></svg><div class="tvpop" id="tvPop" aria-live="polite"></div></div>
   <div class="tvx"><button type="button" id="tvExit">✕ Exit theater</button></div>
-  <div class="fieldhint">Swipe the field sideways to see all of it.</div>
+  <div class="fieldhint"><span id="followTxt">The field follows the ball. Swipe to look around.</span> <button type="button" class="followbtn" id="followBtn" hidden>⌖ Follow ball</button></div>
     <div class="lastplay"><span class="lbl" id="lpLabel">Last play</span><div class="lpbody"><p id="lastPlay">Waiting for the first snap.</p><div id="lpFlag"></div></div></div>
   <div class="fieldbar">
     <div class="legend">
@@ -653,7 +654,20 @@ function placeBall(x, y){
   if (x === null || x === undefined) { S.ballG.style.opacity = 0; return; }
   S.ballG.style.opacity = 1; S.ballG.style.transform = `translate(${X(x)}px,${y}px)`;
   const box = svg.parentElement;
-  if (box.scrollWidth > box.clientWidth + 4) { const px = X(x) / 1200 * svg.clientWidth; box.scrollTo({ left: Math.max(0, px - box.clientWidth / 2), behavior: 'smooth' }); }
+  // phones: keep the ball in view. A manual swipe pauses following for 20 s or until the ball moves to a new spot.
+  if (box.scrollWidth > box.clientWidth + 4) {
+    const moved = S.followX !== x; S.followX = x;
+    if (moved && S.followOff) followResume(false);
+    if (!S.followOff) { const px = X(x) / 1200 * svg.clientWidth; S.autoScrollAt = Date.now(); box.scrollTo({ left: Math.max(0, px - box.clientWidth / 2), behavior: 'smooth' }); }
+  }
+}
+function followPause(){
+  S.followOff = true; $('followBtn').hidden = false; $('followTxt').textContent = 'Paused following the ball.';
+  clearTimeout(S.followT); S.followT = setTimeout(() => followResume(true), 20000);
+}
+function followResume(snap){
+  S.followOff = false; clearTimeout(S.followT); $('followBtn').hidden = true; $('followTxt').textContent = 'The field follows the ball. Swipe to look around.';
+  if (snap && S.followX !== undefined && S.followX !== null) { const x = S.followX; S.followX = undefined; placeBall(x, parseFloat((S.ballG.style.transform.match(/,\s*([\d.]+)px/) || [])[1]) || 266); }
 }
 
 function arrowKind(p){ return p.scoring ? 's' : p.turnover ? 't' : p.penalty ? 'p' : (p.gain !== null && p.gain < 0) ? 'l' : 'w'; }
@@ -1527,6 +1541,13 @@ document.addEventListener('visibilitychange', async () => { if (TV.on && documen
 window.addEventListener('resize', tvFit);
 ['mousemove', 'touchstart', 'keydown'].forEach(ev => document.addEventListener(ev, tvIdle, { passive: true }));
 if (location.hash === '#tv') tvEnter();
+// only a real swipe (a scroll that follows a touch) pauses following; a tap on a play does not
+{ const fb = svg.parentElement; let touchAt = 0, touching = false;
+  fb.addEventListener('touchstart', () => { touching = true; touchAt = Date.now(); }, { passive: true });
+  fb.addEventListener('touchend', () => { touching = false; touchAt = Date.now(); }, { passive: true });
+  fb.addEventListener('scroll', () => { if ((touching || Date.now() - touchAt < 800) && !S.followOff && Date.now() - (S.autoScrollAt || 0) > 900) followPause(); }, { passive: true });
+  fb.addEventListener('wheel', e => { if (Math.abs(e.deltaX) > 2 && fb.scrollWidth > fb.clientWidth + 4) followPause(); }, { passive: true }); }
+$('followBtn').onclick = () => followResume(true);
 $('replayBtn').onclick = () => S.replay ? (stopReplay(), render()) : startReplay();
 $('liveBtn').onclick = () => { stopReplay(); S.viewDrive = null; S.selPlay = null; render(); };
 
