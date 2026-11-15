@@ -249,15 +249,25 @@ function readable(t){
   for (let k = .1; k <= 1; k += .1) { const m = base.map((v, i) => v + (target[i] - v) * k); if (contrast(m, bg) >= want) return toHex(m); }
   return relLum(bg) > .5 ? '#000000' : '#ffffff';
 }
-// How different two colors look (0 = identical, roughly 0-765). Uses the "redmean" approximation of human color perception.
-function colorDist(a, b){ const [r1,g1,b1] = rgbOf(a), [r2,g2,b2] = rgbOf(b); const rm = (r1 + r2) / 2, dr = r1 - r2, dg = g1 - g2, db = b1 - b2;
-  return Math.sqrt((2 + rm/256) * dr*dr + 4 * dg*dg + (2 + (255 - rm)/256) * db*db); }
-const CLASH = 135, FALLBACKS = ['#c2410c', '#6d28d9', '#475569', '#be123c', '#15803d', '#a16207'];
-// If the two teams' colors are too alike, keep the favorite's (or home team's) color and give the other team its second color,
-// or a clearly different stand-in color if that's also too close.
+function hsl(c){ const [r,g,b] = rgbOf(c).map(v => v / 255); const mx = Math.max(r,g,b), mn = Math.min(r,g,b), l = (mx + mn) / 2, d = mx - mn;
+  if (!d) return [0, 0, l * 100]; const sat = d / (1 - Math.abs(2 * l - 1));
+  let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; return [h, sat * 100, l * 100]; }
+// Two colors count as "different enough" only if a fan can tell them apart at a glance:
+// clearly different hue (both colorful), or a big gap in lightness (e.g. navy vs. silver).
+function distinct(a, b){
+  if (!a || !b) return true;
+  const [h1, s1, l1] = hsl(a), [h2, s2, l2] = hsl(b);
+  const dh = Math.min(Math.abs(h1 - h2), 360 - Math.abs(h1 - h2));
+  const colorful = s1 > 25 && s2 > 25 && l1 > 12 && l2 > 12 && l1 < 90 && l2 < 90;
+  if (colorful && dh >= 70) return true;
+  return Math.abs(l1 - l2) >= 40;
+}
+const FALLBACKS = ['#c8102e', '#f2f2f2', '#e8590c', '#7c3aed', '#111111', '#facc15'];
+// The favorite (or home) team keeps its color. If the other team's color is too alike, it switches to its
+// second color, or to a stand-in color that is guaranteed to look different.
 function separateColors(keep, swap){
-  if (colorDist(keep.color, swap.color) >= CLASH) return;
-  const pick = [swap.alt, ...FALLBACKS].find(c => c && colorDist(c, keep.color) >= CLASH && colorDist(c, keep.alt) >= 60 && lum(c) < .85);
+  if (distinct(keep.color, swap.color)) return;
+  const pick = [swap.alt, ...FALLBACKS].find(c => c && distinct(c, keep.color));
   if (pick) { swap.color = hex(pick); swap.alt = hex(pick); swap.swapped = true; }
 }
 const ordinal = n => ({1:'1st',2:'2nd',3:'3rd',4:'4th'}[n] || (n + 'th'));
@@ -995,7 +1005,7 @@ function openPlay(p, D){
   $('popOk').focus();
   $('popX').onclick = closePop; $('popOk').onclick = closePop;
 }
-function closePop(){ $('pop').hidden = true; S.popOpen = false; }
+function closePop(){ $('pop').hidden = true; S.popOpen = false; if (S.selPlay) { S.selPlay = null; render(); } }
 $('pop').addEventListener('click', e => { if (e.target.id === 'pop') closePop(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.popOpen) closePop(); });
 
@@ -1129,7 +1139,7 @@ function startDemo(){
   setTimeout(startReplay, 900);
 }
 
-window.__fv = { colorDist, describe, parseFlags, richText, readable, get M(){ return S.M; } };
+window.__fv = { distinct, describe, parseFlags, richText, readable, get M(){ return S.M; } };
 $('refreshBtn').onclick = async () => {
   const b = $('refreshBtn'); if (b.disabled) return;
   b.disabled = true; b.textContent = 'Refreshing…';
@@ -1139,6 +1149,8 @@ $('refreshBtn').onclick = async () => {
   b.disabled = false; b.textContent = 'Refresh now';
 };
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => S.M && render()); new MutationObserver(() => S.M && render()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) {}
+svg.addEventListener('click', e => { if (S.selPlay && !e.target.closest('#field g g')) { S.selPlay = null; render(); } });
+document.addEventListener('click', e => { if (S.selPlay && !S.popOpen && !e.target.closest('.play, #field, #pop, .drive, button')) { S.selPlay = null; render(); } });
 drawStatic();
 setStatus('Loading games…', false);
 tick();
