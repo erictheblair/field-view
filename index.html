@@ -223,13 +223,16 @@ body.theater .tvpop.on{opacity:1}
 body.theater .tvpop.pop-in{animation:tvin .55s cubic-bezier(.2,1.3,.4,1)}
 body.theater .tvpop.calm{opacity:.82}
 @keyframes tvin{from{transform:translateX(-50%) translateY(30%) scale(.92);opacity:0}to{transform:translateX(-50%);opacity:1}}
-.tvpop .tvhead{display:flex;align-items:center;gap:.8vw;margin-bottom:.4vw;flex-wrap:wrap}
-.tvpop .tvlbl{font-family:var(--display);text-transform:uppercase;letter-spacing:.1em;font-weight:700;font-size:1.15vw;color:#cbd5d1}
+.tvpop .tvhead{display:flex;align-items:center;gap:.8vw;margin-bottom:.7vw;padding-bottom:.6vw;border-bottom:1px solid rgba(255,255,255,.14);flex-wrap:wrap}
+.tvpop .tvteam{font-family:var(--display);text-transform:uppercase;letter-spacing:.1em;font-weight:700;font-size:1.25vw;color:#fff}
+.tvpop .tvteam::before{content:'';display:inline-block;width:.8vw;height:.8vw;border-radius:50%;background:var(--tvc,#facc15);margin-right:.5vw;vertical-align:.05vw;box-shadow:0 0 0 2px rgba(255,255,255,.6)}
+.tvpop .tvdd{font-family:var(--display);font-weight:600;font-size:1.2vw;color:#cbd5d1;letter-spacing:.04em}
+.tvpop .tvwhen{margin-left:auto;font-size:1.05vw;color:#93a6a1;font-variant-numeric:tabular-nums;white-space:nowrap}
 .tvpop .tvtag{font-weight:800;font-size:1vw;letter-spacing:.06em;color:#111;background:#facc15;border:2px solid #fff;border-radius:999px;padding:.1vw .8vw}
 .tvpop .tvtag.td{background:#f5c542;font-size:1.3vw}
 .tvpop .tvtag.to{background:#ef4444;color:#fff}
 .tvpop .tvtag.fl{background:#facc15}
-.tvpop .tvtxt{font-size:1.75vw;line-height:1.3;font-weight:500}
+.tvpop .tvtxt{font-size:2vw;line-height:1.3;font-weight:600}
 .tvpop .tvtxt .pdot{width:.8vw;height:.8vw}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 @keyframes tdpulse{0%,100%{opacity:.55}50%{opacity:1}}
@@ -1426,8 +1429,13 @@ function tvUpdate(M, p, plain){
   if (p && p.flags && p.flags.length) tag += '<span class="tvtag fl">🚩 FLAG</span>';
   const team = p && p.s && M.byId[p.s.tid];
   el.style.setProperty('--tvc', team ? team.color : '#facc15');
-  const lbl = M.state === 'post' ? 'Final play' : [team ? team.name : '', p && p.ddt ? p.ddt.replace(/ at .*/, '') : 'Last play'].filter(Boolean).join(' · ');
-  el.innerHTML = `<div class="tvhead"><span class="tvlbl">${esc(lbl)}</span>${tag}</div><div class="tvtxt">${richText(plain, M)}</div>`;
+  // split "2nd quarter, 5:00 left: ..." into a header time and the play itself
+  let body = p ? describe(p, M) : plain, when = '';
+  if (p) when = quarterLong(p.period, p.clock);
+  else { const m = plain.match(/^((?:\d(?:st|nd|rd|th) quarter|Overtime)(?:, [\d:]+ left)?):\s*/); if (m) { when = m[1]; body = plain.slice(m[0].length); } }
+  const who = M.state === 'post' ? 'Final play' : (team ? team.name : 'Last play');
+  const dd = p && p.ddt ? p.ddt.replace(/ at .*/, '') : '';
+  el.innerHTML = `<div class="tvhead"><span class="tvteam">${esc(who)}</span>${dd ? `<span class="tvdd">${esc(dd)}</span>` : ''}${tag}<span class="tvwhen">${esc(when)}</span></div><div class="tvtxt">${richText(body, M)}</div>`;
   el.classList.add('on');
   if (id !== TV.lastId) {
     const first = TV.lastId === null; TV.lastId = id;
