@@ -755,7 +755,7 @@ function render(){
   renderKeys(M);
   renderRoster(M);
   renderNews(M);
-  if (!S.newsLoading && (NEWS.key !== S.selId + ':' + M.away.id + ':' + M.home.id || Date.now() - NEWS.at > 10 * 60000)) { S.newsLoading = true; loadNews(M).finally(() => { S.newsLoading = false; if (!S.replay) renderNews(S.M); }); }
+  ensureNews(M);
   if ([M.away, M.home].some(t => !(t.id in ROSTERS)) && !S.rLoading && !S.demo) { S.rLoading = true; loadRosters(M).then(() => { S.rLoading = false; if (!S.replay) render(); }); }
 }
 
@@ -1131,9 +1131,11 @@ function storyTeam(a, M){
   return null;
 }
 async function loadNews(M){
-  const key = S.selId + ':' + M.away.id + ':' + M.home.id;
+  const key = newsKey(M);
   if (NEWS.key === key && Date.now() - NEWS.at < 10 * 60000) return;
+  if (NEWS.key !== key) { NEWS.items = null; NEWS.status = []; S.tickKey = null; renderNews(M); } // new game: drop the old game's stories right away
   NEWS.key = key; NEWS.at = Date.now();
+  const status = [];
   // ESPN's game page "news" is often general NFL headlines, so pull each team's own news too
   // and keep only stories that are about one of the two teams in this game.
   let items = normArticles(S.summary?.news?.articles || (S.summary?.article && [S.summary.article]));
@@ -1145,23 +1147,31 @@ async function loadNews(M){
     }
   }
   items = items.map(a => ({ ...a, team: storyTeam(a, M), source: 'ESPN' })).filter(a => a.team);
-  NEWS.status = [{ name: 'ESPN', ok: items.length > 0 }];
+  status.push({ name: 'ESPN', ok: items.length > 0 });
   if (!S.demo) {
     const jobs = [];
     [M.away, M.home].forEach(t => teamFeeds(t).forEach(f => jobs.push(fetchFeed(f.url).then(list => {
-      NEWS.status.push({ name: f.name, team: t, ok: true });
+      status.push({ name: f.name, team: t, ok: true });
       return list.filter(x => x.title).map(x => {
         let headline = x.title, source = f.name;
         if (f.google) { const i = headline.lastIndexOf(' - '); if (i > 10) { source = x.source || headline.slice(i + 3); headline = headline.slice(0, i); } else if (x.source) source = x.source; }
         return { headline, desc: '', when: x.when, url: x.link, img: x.img, teamIds: [], team: t, source };
       });
-    }).catch(() => { NEWS.status.push({ name: f.name, team: t, ok: false }); return []; }))));
+    }).catch(() => { status.push({ name: f.name, team: t, ok: false }); return []; }))));
     (await Promise.all(jobs)).forEach(list => { items = items.concat(list); });
   }
   const seen = new Set();
   const norm = h => h.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (NEWS.key !== key) return; // the viewer switched games while this was loading
+  NEWS.status = status;
   NEWS.items = items.filter(a => { const k = norm(a.headline); if (!k || seen.has(k)) return false; seen.add(k); return true; })
     .sort((a, b) => (Date.parse(b.when) || 0) - (Date.parse(a.when) || 0)).slice(0, 12);
+}
+function newsKey(M){ return S.selId + ':' + M.away.id + ':' + M.home.id; }
+function ensureNews(M){
+  if (NEWS.key === newsKey(M) && (S.newsLoading || Date.now() - NEWS.at < 10 * 60000)) return;
+  S.newsLoading = true;
+  loadNews(M).finally(() => { S.newsLoading = false; if (S.M && !S.replay) { renderNews(S.M); ensureNews(S.M); } });
 }
 function renderTicker(M){
   const tk = $('ticker'), tr = $('ttrack');
