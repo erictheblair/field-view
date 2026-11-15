@@ -267,13 +267,15 @@ function distinct(a, b){
   if (colorful && dh >= 70) return true;
   return Math.abs(l1 - l2) >= 40;
 }
-const FALLBACKS = ['#c8102e', '#f2f2f2', '#e8590c', '#7c3aed', '#111111', '#facc15'];
-// The favorite (or home) team keeps its color. If the other team's color is too alike, it switches to its
-// second color, or to a stand-in color that is guaranteed to look different.
+// The favorite (or home) team keeps its color. If the other team's color is too alike, it keeps its own
+// color family but becomes a light tint of it (or a deep shade, if the favorite's color is the light one).
 function separateColors(keep, swap){
   if (distinct(keep.color, swap.color)) return;
-  const pick = [swap.alt, ...FALLBACKS].find(c => c && distinct(c, keep.color));
-  if (pick) { swap.color = hex(pick); swap.alt = hex(pick); swap.swapped = true; }
+  const base = rgbOf(swap.color), toward = hsl(keep.color)[2] < 50 ? [255,255,255] : [0,0,0];
+  for (let k = .1; k <= .95; k += .05) {
+    const c = toHex(base.map((v, i) => v + (toward[i] - v) * k));
+    if (Math.abs(hsl(c)[2] - hsl(keep.color)[2]) >= 50) { swap.color = c; swap.tinted = true; return; }
+  }
 }
 const ordinal = n => ({1:'1st',2:'2nd',3:'3rd',4:'4th'}[n] || (n + 'th'));
 const qtr = p => p > 4 ? 'OT' : 'Q' + p;
