@@ -63,7 +63,9 @@ h2{font-size:20px;text-transform:uppercase;letter-spacing:.06em}
 .tname small{display:block;font-family:var(--body);font-size:11px;opacity:.7;font-weight:400}
 .score{font-family:var(--display);font-size:46px;font-weight:700;margin-left:auto;font-variant-numeric:tabular-nums}
 .team.home .score{margin-left:0;margin-right:auto}
-.poss{position:absolute;top:6px;font-size:13px;color:var(--gold)}
+.poss{position:absolute;top:6px;font-size:12px;font-weight:800;letter-spacing:.12em;color:#facc15;display:flex;align-items:center;gap:.45em;line-height:1}
+.possball{width:2em;height:auto;overflow:visible;fill:none;stroke:#facc15;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.possball line{stroke-width:1.5}
 .team.away .poss{right:10px}.team.home .poss{left:10px}
 .tos{display:flex;gap:3px;margin-top:4px}.team.home .tos{justify-content:flex-end}
 .tos i{width:12px;height:3px;background:var(--gold);border-radius:2px}.tos i.used{background:rgba(255,255,255,.2)}
@@ -773,7 +775,7 @@ function teamBox(t, side, M, hasBall){
   const fg = lum(t.color) > .6 ? '#111' : '#fff';
   const tos = side === 'away' ? num(M.sit.awayTimeouts) : num(M.sit.homeTimeouts);
   const toHtml = (M.state === 'in' && tos !== null) ? `<div class="tos" aria-label="${tos} timeouts left">${[0,1,2].map(i => `<i class="${i < tos ? '' : 'used'}"></i>`).join('')}</div>` : '';
-  return `${hasBall ? '<span class="poss" aria-label="Has the ball">● ball</span>' : ''}
+  return `${hasBall ? '<span class="poss" aria-label="Has the ball"><svg class="possball" viewBox="-2 -2 36 21" aria-hidden="true"><path d="M0,8.5 C7.04,-2.72 24.96,-2.72 32,8.5 C24.96,19.72 7.04,19.72 0,8.5z"/><line x1="10.24" y1="8.5" x2="21.76" y2="8.5"/><line x1="11.68" y1="6.12" x2="11.68" y2="10.88"/><line x1="14.56" y1="6.12" x2="14.56" y2="10.88"/><line x1="17.44" y1="6.12" x2="17.44" y2="10.88"/><line x1="20.32" y1="6.12" x2="20.32" y2="10.88"/></svg>BALL</span>' : ''}
     <div class="badge" style="background:${t.color};color:${fg}">${esc(t.abbr)}</div>
     <div class="tname">${esc(t.name)}<small>${esc(t.record)}</small>${toHtml}</div>
     <div class="score">${esc(t.score)}</div>`;
