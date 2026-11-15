@@ -60,6 +60,7 @@ h2{font-size:20px;text-transform:uppercase;letter-spacing:.06em}
 .fieldbox{position:relative;border-radius:12px;overflow:hidden;background:var(--turf);box-shadow:0 1px 0 var(--line)}
 .fieldbox svg{display:block;width:100%;height:auto}
 .fieldbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.fieldhint{display:none;font-size:12px;color:var(--muted);margin-top:-8px}
 .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:16px;height:3px;border-radius:2px;display:inline-block}
@@ -81,18 +82,36 @@ button.b[hidden]{display:none}
 .mini{height:8px;background:color-mix(in srgb,var(--turf) 25%,var(--line));border-radius:4px;position:relative}
 .mini b{position:absolute;top:0;bottom:0;border-radius:4px}
 .plays{display:grid;gap:0;max-height:520px;overflow-y:auto}
-.play{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;padding:8px 6px;border-top:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-bottom:0;color:inherit;font:inherit;text-align:left}
+.play{display:grid;padding:8px 6px;border-top:1px solid var(--line)}
 .play:first-child{border-top:0}
 .play .when{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;padding-top:2px}
 .play .sit{font-size:12px;font-weight:600;color:var(--accent)}
 .play .txt{font-size:13.5px}
 .play.sel{background:color-mix(in srgb,var(--fd) 16%,transparent)}
 .play.scoring .txt{font-weight:600}
+.flags{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);align-items:center}
+.flags b{color:var(--fg);font-variant-numeric:tabular-nums}
+.flagic{display:inline-block;width:12px;height:14px;background:linear-gradient(var(--fd),var(--fd)) 0 0/12px 9px no-repeat,linear-gradient(var(--fg),var(--fg)) 0 0/2px 14px no-repeat;vertical-align:-2px;flex:0 0 auto}
+.play{grid-template-columns:1fr}
+.playmain{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;background:none;border:0;color:inherit;font:inherit;text-align:left;padding:0;cursor:pointer;width:100%}
+details.flag{margin:6px 0 0 0;border:1px solid color-mix(in srgb,var(--fd) 60%,var(--line));background:color-mix(in srgb,var(--fd) 12%,transparent);border-radius:8px;padding:6px 10px;font-size:13px}
+details.flag summary{cursor:pointer;display:flex;gap:8px;align-items:center;font-weight:600;list-style:none}
+details.flag summary::-webkit-details-marker{display:none}
+details.flag summary::after{content:"What does this mean?";margin-left:auto;font-weight:500;color:var(--accent);font-size:12px;white-space:nowrap}
+details.flag[open] summary::after{content:"Hide"}
+details.flag p{margin:6px 0 0;color:var(--fg)}
+details.flag .st{font-weight:500;color:var(--muted)}
+.lpflag{margin-top:6px;font-size:13px;display:flex;gap:8px;align-items:flex-start}
+.lastplay{flex-wrap:wrap}
+.lastplay .lpbody{min-width:0;flex:1 1 300px}
 .empty{color:var(--muted);font-size:14px;padding:8px 0}
 .foot{font-size:12px;color:var(--muted)}
 .foot a{color:var(--accent)}
 @media (max-width:560px){
-  .badge{width:38px;height:38px;font-size:14px}.score{font-size:34px}.tname{font-size:17px}.tname small{display:none}
+  .badge{width:40px;height:40px;font-size:15px}.score{font-size:34px}.tname{display:none}.poss{top:2px;font-size:11px}
+  .team .tos{display:none}
+  .fieldbox{overflow-x:auto;-webkit-overflow-scrolling:touch}.fieldbox svg{width:820px;max-width:none}
+  .fieldhint{display:block!important}
   .team{padding:8px;gap:6px}.mid{min-width:92px;padding:6px 8px}.clock{font-size:19px}.dd{font-size:14px}
   .top h1{font-size:24px}
 }
@@ -115,9 +134,11 @@ button.b[hidden]{display:none}
     <div class="team home" id="homeBox"></div>
   </div>
 
-  <div class="lastplay"><span class="lbl" id="lpLabel">Last play</span><p id="lastPlay">Waiting for the first snap.</p></div>
+  <div class="lastplay"><span class="lbl" id="lpLabel">Last play</span><div class="lpbody"><p id="lastPlay">Waiting for the first snap.</p><div id="lpFlag"></div></div></div>
+  <div class="flags" id="flagCount" hidden></div>
 
   <div class="fieldbox"><svg id="field" viewBox="0 0 1200 533" role="img" aria-label="Football field showing ball position and the plays of the drive"></svg></div>
+  <div class="fieldhint">Swipe the field sideways to see all of it.</div>
   <div class="fieldbar">
     <div class="legend">
       <span><i style="background:var(--los)"></i>Line of scrimmage</span>
@@ -126,6 +147,7 @@ button.b[hidden]{display:none}
       <span><i style="background:#ff8a7a"></i>Loss</span>
       <span><i style="background:#f5c542"></i>Score</span>
       <span><i style="background:#ff4d4d"></i>Turnover</span>
+      <span><span class="flagic"></span>Penalty flag</span>
     </div>
     <div class="btns">
       <button class="b" id="replayBtn" type="button">Replay this drive</button>
@@ -170,6 +192,68 @@ async function getJSON(url){
   try { const r = await fetch(url, { signal: ctrl.signal, cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
   finally { clearTimeout(t); }
 }
+
+/* ---------- penalties ---------- */
+const GLOSSARY = [
+  [/false start/i, 'An offensive player moved before the snap. 5 yards against the offense, and the play never happens.'],
+  [/defensive holding/i, 'A defender grabbed or held a receiver or blocker to keep him from getting open. 5 yards and an automatic first down for the offense.'],
+  [/offensive holding|^holding/i, 'A blocker grabbed or hooked a defender to stop him instead of blocking him fairly. 10 yards against the offense.'],
+  [/defensive pass interference/i, 'A defender made illegal contact with a receiver while the pass was in the air, like grabbing his arm or shoving him. The offense gets the ball where the foul happened and a first down, so it can be a huge penalty.'],
+  [/offensive pass interference/i, 'A receiver pushed off or blocked a defender while the pass was in the air. 10 yards against the offense.'],
+  [/illegal contact/i, 'A defender shoved or held a receiver more than 5 yards past the line before the pass was thrown. 5 yards and an automatic first down.'],
+  [/roughing the passer/i, 'A defender hit the quarterback too late, too low, or in the head after he threw the ball. 15 yards and an automatic first down.'],
+  [/roughing the kicker/i, 'A defender ran hard into the kicker or punter after the kick. 15 yards and an automatic first down.'],
+  [/running into the kicker/i, 'A defender bumped the kicker or punter, but not hard enough to be roughing. 5 yards.'],
+  [/unnecessary roughness/i, 'A player made an extra-violent or late hit that wasn\'t needed, like hitting someone after the whistle or out of bounds. 15 yards.'],
+  [/unsportsmanlike|taunting/i, 'A player acted out, like taunting an opponent, arguing, or an over-the-top celebration. 15 yards.'],
+  [/face ?mask/i, 'A player grabbed and twisted or pulled an opponent\'s face mask. 15 yards, a dangerous foul.'],
+  [/horse ?collar/i, 'A defender tackled by grabbing the inside back of the ball carrier\'s collar or shoulder pads and yanking him down. 15 yards.'],
+  [/delay of game/i, 'The offense didn\'t snap the ball before the play clock hit zero. 5 yards.'],
+  [/too many men|illegal substitution/i, 'A team had more than 11 players on the field, or players subbed in illegally. 5 yards.'],
+  [/encroachment/i, 'A defender crossed the line and touched an offensive player before the snap. 5 yards against the defense.'],
+  [/neutral zone infraction/i, 'A defender jumped across the line before the snap and made an offensive player flinch. 5 yards against the defense.'],
+  [/offside/i, 'A defender was across the line of scrimmage when the ball was snapped. 5 yards against the defense.'],
+  [/illegal formation/i, 'The offense lined up wrong, usually not enough players on the line of scrimmage. 5 yards.'],
+  [/illegal shift/i, 'Two or more offensive players were still moving or not set before the snap. 5 yards.'],
+  [/illegal motion/i, 'An offensive player was moving toward the line when the ball was snapped. 5 yards.'],
+  [/illegal block in the back/i, 'A player blocked an opponent from behind, usually on a kick or punt return. 10 yards.'],
+  [/illegal block above the waist/i, 'On a kick return, a player blocked an opponent from behind above the waist. 10 yards.'],
+  [/intentional grounding/i, 'The quarterback threw the ball away to avoid a sack when no receiver was nearby. Loss of down, and the ball goes back to where he threw it.'],
+  [/illegal forward pass/i, 'A pass was thrown from past the line of scrimmage, or a second forward pass was thrown on the same play. 5 yards and loss of down.'],
+  [/ineligible downfield/i, 'An offensive lineman went too far downfield before a pass was thrown. 5 yards.'],
+  [/illegal use of hands/i, 'A player hit or pushed an opponent in the face or neck area with his hands. 10 yards on offense, 5 yards and a first down on defense.'],
+  [/chop block/i, 'One player blocked a defender high while a teammate hit him low at the knees. 15 yards, because it can cause serious injuries.'],
+  [/clipping/i, 'A player blocked an opponent from behind at or below the waist. 15 yards.'],
+  [/tripping/i, 'A player tripped an opponent with his leg or foot. 10 yards.'],
+  [/use of helmet|lowering the head/i, 'A player lowered his head and hit an opponent with his helmet. 15 yards.'],
+  [/low block/i, 'A player blocked an opponent below the knees in a way that\'s not allowed. 15 yards.'],
+  [/fair catch interference|kick catch interference/i, 'The kicking team got in the way of the returner while he was trying to catch the ball. 15 yards.'],
+  [/illegal touch/i, 'A player touched the ball after going out of bounds, or a player who wasn\'t allowed to touch it did. 5 yards.'],
+  [/player out of bounds/i, 'A player on the kicking team went out of bounds and came back in. 5 yards.'],
+  [/disqualification/i, 'A player was ejected from the game for a serious foul.'],
+  [/personal foul/i, 'A dangerous or overly rough hit. 15 yards.'],
+  [/illegal challenge/i, 'A coach threw a challenge flag when it wasn\'t allowed. 15 yards.'],
+  [/delay of kick|illegal kick/i, 'A rule was broken on the kick or kickoff setup. Usually 5 yards.']
+];
+function explain(name){ const g = GLOSSARY.find(([re]) => re.test(name)); return g ? g[1] : 'The referees threw a flag for a rule violation. The play-by-play text above has the details.'; }
+function parseFlags(text){
+  const out = []; if (!text) return out;
+  const re = /PENALTY on ([A-Z]{2,4})(?:-([^,]+?))?,\s*([^,.]+?),\s*(?:(\d+)\s+yards?|(declined)|(offsetting))/gi;
+  let m;
+  while ((m = re.exec(text))) out.push({ team: m[1].toUpperCase(), player: (m[2] || '').trim(), name: m[3].trim().replace(/\s+/g, ' '), yards: m[4] ? +m[4] : null, status: m[5] ? 'declined' : m[6] ? 'offsetting' : 'accepted' });
+  if (!out.length && /penalty/i.test(text)) out.push({ team: '', player: '', name: 'Penalty', yards: null, status: 'accepted' });
+  return out;
+}
+function flagSummary(f, M){
+  const t = M.byId && Object.values(M.byId).find(x => x.abbr === f.team);
+  const who = t ? t.name : (f.team || '');
+  const tail = f.status === 'declined' ? ' (declined)' : f.status === 'offsetting' ? ' (offsetting)' : (f.yards !== null ? ` · ${f.yards} yds` : '');
+  return `${who ? 'Flag on ' + esc(who) + ': ' : 'Flag: '}${esc(f.name)}<span class="st">${esc(tail)}</span>`;
+}
+function flagStatusNote(f){ return f.status === 'declined' ? ' The other team turned it down, so the result of the play stands.' : f.status === 'offsetting' ? ' Both teams were flagged, so the penalties cancel out and the down is replayed.' : ''; }
+const OPEN = new Set();
+document.addEventListener('toggle', e => { const k = e.target?.dataset?.k; if (!k) return; e.target.open ? OPEN.add(k) : OPEN.delete(k); }, true);
+function flagDetails(f, M, k){ return `<details class="flag" data-k="${esc(k)}"${OPEN.has(k) ? ' open' : ''}><summary><span class="flagic"></span><span>${flagSummary(f, M)}</span></summary><p>${esc(explain(f.name) + flagStatusNote(f))}${f.player ? ' <span class="st">(' + esc(f.player) + ')</span>' : ''}</p></details>`; }
 
 /* ---------- model ---------- */
 function teamFrom(c){
@@ -239,11 +323,12 @@ function normPlay(p, d, M){
   const kick = /kickoff/i.test(type) || /\bkicks\b/i.test(text);
   const turnover = /interception|fumble.*(recovered by|lost)|intercepted/i.test(type + ' ' + text) && !/no play/i.test(text) || (s && e && s.tid !== e.tid && !/punt|kickoff|field goal|extra point|two-point/i.test(type + ' ' + text) && !/no play/i.test(text));
   const scoring = !!p.scoringPlay;
-  const penalty = /penalty/i.test(type) || /no play/i.test(text);
+  const flags = parseFlags(text);
+  const penalty = flags.length > 0 || /penalty/i.test(type) || /no play/i.test(text);
   let gain = num(p.statYardage);
   if (gain === null && s && e && s.tid === e.tid) gain = s.yte - e.yte;
   return {
-    id: String(p.id ?? p.playId ?? Math.random()), type, text, s, e, kick, turnover, scoring, penalty, gain,
+    id: String(p.id ?? p.playId ?? Math.random()), type, text, s, e, kick, turnover, scoring, penalty, flags, gain,
     period: num(p.period?.number ?? p.period) || null, clock: p.clock?.displayValue || '',
     ddt: (p.start && (p.start.shortDownDistanceText || p.start.downDistanceText)) || '',
     drawable: !!(s && e) && !SKIP.test(type) && !kick
@@ -317,6 +402,8 @@ function placeLines(los, fd){
 function placeBall(x, y){
   if (x === null || x === undefined) { S.ballG.style.opacity = 0; return; }
   S.ballG.style.opacity = 1; S.ballG.style.transform = `translate(${X(x)}px,${y}px)`;
+  const box = svg.parentElement;
+  if (box.scrollWidth > box.clientWidth + 4) { const px = X(x) / 1200 * svg.clientWidth; box.scrollTo({ left: Math.max(0, px - box.clientWidth / 2), behavior: 'smooth' }); }
 }
 
 function arrowKind(p){ return p.scoring ? 's' : p.turnover ? 't' : p.penalty ? 'p' : (p.gain !== null && p.gain < 0) ? 'l' : 'w'; }
@@ -341,6 +428,12 @@ function drawDrive(D, M, uptoIdx){
       el('circle', { cx: x1, cy: y, r: 9, fill: 'none', stroke: KC[k], 'stroke-width': 3 }, g);
     } else {
       el('line', { x1, x2, y1: y, y2: y, stroke: KC[k], 'stroke-width': sel ? 7 : (i === n - 1 ? 6 : 4), 'stroke-linecap': 'round', 'stroke-dasharray': p.penalty ? '10 8' : '', 'marker-end': `url(#ah-${k})` }, g);
+    }
+    if (p.penalty) {
+      const fx = x2;
+      const fg = el('g', { transform: `translate(${fx},${y - 26})` }, g);
+      el('line', { x1: 0, x2: 0, y1: 0, y2: 22, stroke: '#111', 'stroke-width': 2 }, fg);
+      el('path', { d: 'M1,0 L18,5 L1,11 z', fill: '#facc15', stroke: '#111', 'stroke-width': 1 }, fg);
     }
     if (p.ddt && lane >= 20) {
       const left = x2 >= x1;
@@ -412,6 +505,12 @@ function render(){
   const lp = M.sit.lastPlay?.text || (allPlays.length ? allPlays[allPlays.length - 1].text : '');
   $('lpLabel').textContent = M.state === 'post' ? 'Final play' : 'Last play';
   $('lastPlay').textContent = lp || (M.state === 'pre' ? 'The game hasn\'t started yet.' : 'Waiting for the next play.');
+  $('lpFlag').innerHTML = parseFlags(lp).map((f, i) => flagDetails(f, M, 'lp' + i + lp.length)).join('');
+  const tally = {}; [M.away, M.home].forEach(t => tally[t.abbr] = { n: 0, y: 0 });
+  allPlays.forEach(p => (p.flags || []).forEach(f => { if (f.status === 'accepted' && tally[f.team]) { tally[f.team].n++; tally[f.team].y += f.yards || 0; } }));
+  const anyFlags = M.state !== 'pre' && allPlays.length;
+  $('flagCount').hidden = !anyFlags;
+  if (anyFlags) $('flagCount').innerHTML = `<span class="flagic"></span><span>Penalties so far</span>` + [M.away, M.home].map(t => `<span>${esc(t.name)} <b>${tally[t.abbr].n}</b> for <b>${tally[t.abbr].y}</b> yds</span>`).join('');
 
   // which drive is on the field
   if (!S.replay) {
@@ -487,12 +586,15 @@ function renderPlays(M){
   if (!D || !D.plays.length) { box.innerHTML = `<div class="empty">${M.state === 'pre' ? 'Plays will appear here live.' : 'No plays in this drive yet.'}</div>`; return; }
   box.innerHTML = '';
   [...D.plays].reverse().forEach(p => {
-    const b = document.createElement('button'); b.type = 'button';
-    b.className = 'play' + (p.id === S.selPlay ? ' sel' : '') + (p.scoring ? ' scoring' : '');
+    const wrap = document.createElement('div');
+    wrap.className = 'play' + (p.id === S.selPlay ? ' sel' : '') + (p.scoring ? ' scoring' : '');
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'playmain';
     b.innerHTML = `<div class="when">${p.period ? qtr(p.period) : ''} ${esc(p.clock)}</div>
       <div>${p.ddt ? `<div class="sit">${esc(p.ddt)}</div>` : ''}<div class="txt">${esc(p.text)}</div></div>`;
     if (p.s) b.onclick = () => { stopReplay(); S.selPlay = (S.selPlay === p.id) ? null : p.id; if (D.id !== M.currentDriveId) S.viewDrive = D.id; render(); };
-    box.appendChild(b);
+    wrap.appendChild(b);
+    if (p.flags && p.flags.length) wrap.insertAdjacentHTML('beforeend', p.flags.map((f, i) => flagDetails(f, M, p.id + ':' + i)).join(''));
+    box.appendChild(wrap);
   });
 }
 
@@ -517,6 +619,7 @@ function startReplay(){
     placeBall(p.e.x, res ? res.y : 266);
     $('lpLabel').textContent = (p.ddt || 'Play').replace(/ at .*/, '');
     $('lastPlay').textContent = p.text;
+    $('lpFlag').innerHTML = (p.flags || []).map((f, i) => flagDetails(f, M, 'r' + p.id + i)).join('');
   }, 1700);
 }
 $('replayBtn').onclick = () => S.replay ? (stopReplay(), render()) : startReplay();
@@ -587,7 +690,7 @@ function startDemo(){
   });
   const d1 = mk(TEN, JAX, 1, [
     [1,10,75,4,'T.Spears up the middle to TEN 29 for 4 yards.','15:00'],
-    [2,6,71,9,'C.Ward pass short right to C.Ridley to TEN 38 for 9 yards.','14:21'],
+    [2,6,71,9,'C.Ward pass short right to C.Ridley to TEN 38 for 9 yards. PENALTY on JAX-D.Lloyd, Defensive Offside, declined.','14:21'],
     [1,10,62,-2,'T.Pollard left end to TEN 36 for -2 yards.','13:44'],
     [2,12,64,0,'C.Ward pass incomplete deep left.','13:05'],
     [3,12,64,7,'C.Ward pass short middle to T.Burks to TEN 43 for 7 yards.','12:59'],
@@ -599,7 +702,7 @@ function startDemo(){
     [1,10,69,-3,'T.Lawrence sacked at JAX 28 for -3 yards.','10:58'],
     [2,13,72,22,'T.Lawrence pass deep left to T.Hunter to TEN 50 for 22 yards.','10:20'],
     [1,10,50,5,'B.Tuten left end to TEN 45 for 5 yards.','9:41'],
-    [2,5,45,-5,'PENALTY on JAX, False Start, 5 yards, enforced at TEN 45 - No Play.','9:15', { type: { text: 'Penalty' } }],
+    [2,5,45,-5,'PENALTY on JAX-C.Robinson, False Start, 5 yards, enforced at TEN 45 - No Play.','9:15', { type: { text: 'Penalty' } }],
     [2,10,50,18,'T.Lawrence pass short middle to B.Strange to TEN 32 for 18 yards.','9:09'],
     [1,10,32,9,'T.Etienne up the middle to TEN 23 for 9 yards.','8:30'],
     [2,1,23,5,'T.Lawrence scrambles right end to TEN 18 for 5 yards.','7:52']
