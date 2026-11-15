@@ -109,6 +109,7 @@ button.b.spin svg{animation:spin .8s linear infinite}
 .play .txt{font-size:13.5px}
 .play.sel{background:color-mix(in srgb,var(--fd) 16%,transparent)}
 .play.scoring .txt{font-weight:600}
+.fdtag{display:inline-block;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#111;background:#facc15;border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:1px}
 .flags{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);align-items:center}
 .flags b{color:var(--fg);font-variant-numeric:tabular-nums}
 .flagic{display:inline-block;width:12px;height:14px;background:linear-gradient(var(--fd),var(--fd)) 0 0/12px 9px no-repeat,linear-gradient(var(--fg),var(--fg)) 0 0/2px 14px no-repeat;vertical-align:-2px;flex:0 0 auto}
@@ -227,6 +228,7 @@ details.flag .st{font-weight:500;color:var(--muted)}
       <span><i style="background:#f5c542"></i>Score</span>
       <span><i style="background:#ff4d4d"></i>Turnover</span>
       <span><span class="flagic"></span>Penalty flag</span>
+      <span><span class="fdtag" style="margin:0">1st down</span>First down earned</span>
       <span><i style="background:repeating-linear-gradient(90deg,#d7a22a 0 3px,transparent 3px 7px)"></i>Kick (field goal, extra point, punt)</span>
     </div>
     <div class="btns">
@@ -506,6 +508,17 @@ function normDrive(d, i, M){
   const D = { id: String(d.id ?? i), tid, team: M.byId[tid], result: d.displayResult || d.result || '', desc: d.description || '',
               isScore: !!d.isScore, period: d.start?.period?.number || null, clock: d.start?.clock?.displayValue || '', elapsed: d.timeElapsed?.displayValue || '' };
   D.plays = (d.plays || []).map(p => normPlay(p, D, M));
+  // Mark plays that earned a first down: the offense keeps the ball and the next snap is 1st down,
+  // either from the gain itself or from a defensive penalty.
+  const real = D.plays.filter(p => p.s && !SKIP.test(p.type));
+  real.forEach((p, i) => {
+    if (p.isTD || p.kickType || p.kick || p.turnover || !p.s.down) return;
+    const nx = real[i + 1];
+    const endFirst = p.e && p.e.tid === p.s.tid && p.e.down === 1;
+    const nextFirst = nx && nx.s.tid === p.s.tid && nx.s.down === 1;
+    const earned = p.s.down > 1 || (p.gain !== null && p.s.dist !== null && p.gain >= p.s.dist) || (nx && nx.s.dist === 10 && p.s.down === 1 && nx.s.yte <= p.s.yte - p.s.dist);
+    if ((nextFirst || (!nx && endFirst)) && earned) p.firstDown = true;
+  });
   const dr = D.plays.filter(p => p.drawable);
   D.startX = dr.length ? dr[0].s.x : null;
   D.endX = dr.length ? dr[dr.length-1].e.x : null;
@@ -557,6 +570,7 @@ function drawStatic(){
   S.fdLine = el('rect', { x: -3, y: 0, width: 6, height: 533, fill: 'var(--fd)', opacity: .95 }, S.fdG);
   S.losG = el('g', { class: 'lineg' }, svg);
   S.losLine = el('rect', { x: -3, y: 0, width: 6, height: 533, fill: 'var(--los)', opacity: .95 }, S.losG);
+  S.tagG = el('g', {}, svg); // first-down pills sit above the lines
   // ball
   S.ballG = el('g', { class: 'ballg' }, svg);
   el('ellipse', { cx: 0, cy: 6, rx: 22, ry: 6, fill: 'rgba(0,0,0,.35)' }, S.ballG);
@@ -583,7 +597,7 @@ function arrowKind(p){ return p.scoring ? 's' : p.turnover ? 't' : p.penalty ? '
 const KC = { w: '#ffffff', l: '#ff8a7a', s: '#f5c542', t: '#ff4d4d', p: '#e9d98a' };
 
 function drawDrive(D, M, uptoIdx){
-  S.dyn.innerHTML = '';
+  S.dyn.innerHTML = ''; S.tagG.innerHTML = '';
   if (!D) return null;
   // attach a separately-reported extra point / 2-point try to the touchdown before it
   D.plays.forEach((p, i) => {
@@ -638,6 +652,19 @@ function drawDrive(D, M, uptoIdx){
       const fg = el('g', { transform: `translate(${fx},${y - 26})` }, g);
       el('line', { x1: 0, x2: 0, y1: 0, y2: 22, stroke: '#111', 'stroke-width': 2 }, fg);
       el('path', { d: 'M1,0 L18,5 L1,11 z', fill: '#facc15', stroke: '#111', 'stroke-width': 1 }, fg);
+    }
+    if (p.firstDown) {
+      // pill just past the arrowhead on the same row (flips side near the edge), plus a tick at the spot
+      const dir = x2 >= x1 ? 1 : -1, gap = i === n - 1 ? 28 : 14, w = 78;
+      let side = dir;
+      if (side > 0 && x2 + gap + w > X(110)) side = -1;
+      if (side < 0 && x2 - gap - w < X(-10)) side = 1;
+      const px = side > 0 ? x2 + gap : x2 - gap - w;
+      el('line', { x1: x2, x2: x2, y1: y - 11, y2: y + 11, stroke: '#facc15', 'stroke-width': 3 }, g);
+      const tg = el('g', { opacity: S.selPlay && !sel ? .45 : 1 }, S.tagG);
+      el('rect', { x: px, y: y - 11, width: w, height: 22, rx: 11, fill: '#facc15', stroke: '#111', 'stroke-width': 1.5 }, tg);
+      const ft = el('text', { x: px + w / 2, y: y + 1, fill: '#111', 'font-size': 13, 'font-weight': 800, 'font-family': 'Inter, sans-serif', 'text-anchor': 'middle', 'dominant-baseline': 'middle', 'letter-spacing': '.04em' }, tg);
+      ft.textContent = '1ST DOWN';
     }
     if (p.isTD && !p.kickType) {
       // glowing arrow, then point badges in the end zone: +6, then +1 / +2 / +0 for the try
@@ -879,7 +906,7 @@ function renderPlays(M){
     wrap.className = 'play' + (p.id === S.selPlay ? ' sel' : '') + (p.scoring ? ' scoring' : '');
     const b = document.createElement('button'); b.type = 'button'; b.className = 'playmain';
     b.innerHTML = `<div class="when">${p.period ? qtr(p.period) : ''} ${esc(p.clock)}</div>
-      <div>${p.ddt ? `<div class="sit">${esc(p.ddt)}</div>` : ''}<div class="txt">${richText(describe(p, M), M)}</div></div>`;
+      <div>${p.ddt || p.firstDown ? `<div class="sit">${esc(p.ddt || '')}${p.firstDown ? ' <span class="fdtag">1st down</span>' : ''}</div>` : ''}<div class="txt">${richText(describe(p, M), M)}</div></div>`;
     b.onclick = () => { stopReplay(); if (p.s) { S.selPlay = p.id; if (D.id !== M.currentDriveId) S.viewDrive = D.id; render(); } openPlay(p, D); };
     wrap.appendChild(b);
     if (p.flags && p.flags.length) wrap.insertAdjacentHTML('beforeend', p.flags.map((f, i) => flagDetails(f, M, p.id + ':' + i)).join(''));
@@ -915,7 +942,7 @@ function plainPlay(p, M){
   const O = off ? off.name : 'The offense', Dn = def ? def.name : 'the defense';
   const td = /TOUCHDOWN/i.test(t) && !/nullified|no play/i.test(t);
   let out = '', m;
-  const first = () => (p.s && p.s.dist !== null && p.gain !== null && p.gain >= p.s.dist && !td && !p.penalty && p.s.tid === (p.e && p.e.tid)) ? ' First down.' : '';
+  const first = () => p.firstDown ? ' First down!' : '';
   const fumble = (who) => {
     if (!/FUMBLES/i.test(t)) return '';
     const f0 = t.match(R(`(${NM}) FUMBLES`)); const f = [null, f0 ? f0[1] : (who || 'The ball carrier')];
@@ -928,7 +955,7 @@ function plainPlay(p, M){
   if (/no play/i.test(t) && p.flags && p.flags.length) {
     const f = p.flags[0]; const ft = teamOf(f.team, M);
     out = `Flag before the play: ${f.name.toLowerCase()} on the ${ft ? ft.name : f.team}${f.player ? ` (${f.player})` : ''}. The play doesn't count${f.yards ? `, and it's a ${f.yards}-yard penalty` : ''}.`;
-    return out;
+    return out + (p.firstDown ? ' Automatic first down!' : '');
   }
   if ((m = t.match(R(`(${NM}) pass .*?(?:intended for (${NM}) )?INTERCEPTED by (${NM})(?: at (${SP}))?`)))) {
     out = `${O} QB ${m[1]} threw${m[2] ? ' toward ' + m[2] : ''}, but ${Dn} defender ${m[3]} intercepted it${m[4] ? ' at ' + spotPlain(m[4], M) : ''}.`;
@@ -1285,7 +1312,7 @@ function openPlay(p, D){
     ['Result', gainTxt],
     ['Ended at', spotText(p.e, M)],
   ];
-  if (first && !p.penalty) cells.push(['First down?', first]);
+  if (p.s && p.s.down && !p.isTD && !p.kickType) cells.push(['First down?', p.firstDown ? 'Yes ✓' : 'No']);
   if (score) cells.push(['Score after', score]);
   $('popCard').innerHTML = `
     <div class="pophead" style="background:${t.color};color:${fg}">
@@ -1318,7 +1345,7 @@ function startReplay(){
   const list = D.plays.filter(p => p.drawable); if (!list.length) return;
   stopReplay(); S.selPlay = null;
   let i = -1;
-  S.dyn.innerHTML = '';
+  S.dyn.innerHTML = ''; S.tagG.innerHTML = '';
   placeBall(list[0].s.x, 266); placeLines(list[0].s.x, null);
   $('replayBtn').textContent = 'Stop replay';
   S.replay = setInterval(() => {
