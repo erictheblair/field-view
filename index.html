@@ -247,8 +247,9 @@ details.flag .st{font-weight:500;color:var(--muted)}
   </div>
   <section class="card" id="newsCard">
     <h2>Headlines</h2>
-    <div class="sub">Stories about the two teams in the game you are viewing, from ESPN. Opens in a new tab.</div>
+    <div class="sub">Stories about the two teams in the game you are viewing, from ESPN, team fan blogs, the teams' own sites and Google News. Opens in a new tab.</div>
     <div class="news" id="news"><div class="empty">Loading headlines…</div></div>
+    <div class="sub" id="newsSrc" style="margin:0"></div>
   </section>
 
   <section class="card" id="rosterCard">
@@ -1056,6 +1057,60 @@ function renderRoster(M){
 $('rsearch').addEventListener('input', () => S.M && renderRoster(S.M));
 
 /* ---------- headlines ---------- */
+// Team news feeds. SB Nation fan blogs (by team abbreviation) plus each team's official site.
+// Google News (searched by full team name) covers local papers and national outlets.
+const BLOGS = { ARI:['Revenge of the Birds','revengeofthebirds.com'], ATL:['The Falcoholic','thefalcoholic.com'], BAL:['Baltimore Beatdown','baltimorebeatdown.com'],
+  BUF:['Buffalo Rumblings','buffalorumblings.com'], CAR:['Cat Scratch Reader','catscratchreader.com'], CHI:['Windy City Gridiron','windycitygridiron.com'],
+  CIN:['Cincy Jungle','cincyjungle.com'], CLE:['Dawgs By Nature','dawgsbynature.com'], DAL:['Blogging The Boys','bloggingtheboys.com'],
+  DEN:['Mile High Report','milehighreport.com'], DET:['Pride Of Detroit','prideofdetroit.com'], GB:['Acme Packing Company','acmepackingcompany.com'],
+  HOU:['Battle Red Blog','battleredblog.com'], IND:['Stampede Blue','stampedeblue.com'], JAX:['Big Cat Country','bigcatcountry.com'],
+  KC:['Arrowhead Pride','arrowheadpride.com'], LV:['Silver And Black Pride','silverandblackpride.com'], LAC:['Bolts From The Blue','boltsfromtheblue.com'],
+  LAR:['Turf Show Times','turfshowtimes.com'], MIA:['The Phinsider','thephinsider.com'], MIN:['Daily Norseman','dailynorseman.com'],
+  NE:["Pats Pulpit",'patspulpit.com'], NO:['Canal Street Chronicles','canalstreetchronicles.com'], NYG:['Big Blue View','bigblueview.com'],
+  NYJ:['Gang Green Nation','ganggreennation.com'], PHI:['Bleeding Green Nation','bleedinggreennation.com'], PIT:['Behind The Steel Curtain','behindthesteelcurtain.com'],
+  SF:['Niners Nation','ninersnation.com'], SEA:['Field Gulls','fieldgulls.com'], TB:['Bucs Nation','bucsnation.com'],
+  TEN:['Music City Miracles','musiccitymiracles.com'], WSH:['Hogs Haven','hogshaven.com'], WAS:['Hogs Haven','hogshaven.com'] };
+const SITES = { ARI:'azcardinals.com', ATL:'atlantafalcons.com', BAL:'baltimoreravens.com', BUF:'buffalobills.com', CAR:'panthers.com', CHI:'chicagobears.com',
+  CIN:'bengals.com', CLE:'clevelandbrowns.com', DAL:'dallascowboys.com', DEN:'denverbroncos.com', DET:'detroitlions.com', GB:'packers.com', HOU:'houstontexans.com',
+  IND:'colts.com', JAX:'jaguars.com', KC:'chiefs.com', LV:'raiders.com', LAC:'chargers.com', LAR:'therams.com', MIA:'miamidolphins.com', MIN:'vikings.com',
+  NE:'patriots.com', NO:'neworleanssaints.com', NYG:'giants.com', NYJ:'newyorkjets.com', PHI:'philadelphiaeagles.com', PIT:'steelers.com', SF:'49ers.com',
+  SEA:'seahawks.com', TB:'buccaneers.com', TEN:'tennesseetitans.com', WSH:'commanders.com', WAS:'commanders.com' };
+function teamFeeds(t){
+  const out = [];
+  const b = BLOGS[t.abbr]; if (b) out.push({ name: b[0], url: `https://www.${b[1]}/rss/current.xml` });
+  const site = SITES[t.abbr]; if (site) out.push({ name: t.name + ' official site', url: `https://www.${site}/rss/news` });
+  if (t.full) out.push({ name: 'Google News', url: `https://news.google.com/rss/search?q=${encodeURIComponent('"' + t.full + '"')}&hl=en-US&gl=US&ceid=US:en`, google: true });
+  return out;
+}
+// Browsers can't read most news feeds directly, so feeds go through a free public relay.
+// Try AllOrigins first (fresh copy), then rss2json (cached, but a second chance).
+function parseRSS(xml){
+  const doc = new DOMParser().parseFromString(xml, 'text/xml');
+  if (doc.querySelector('parsererror')) throw new Error('bad feed');
+  const nodes = [...doc.querySelectorAll('item, entry')];
+  if (!nodes.length) throw new Error('empty feed');
+  return nodes.slice(0, 15).map(n => {
+    const g = sel => n.querySelector(sel)?.textContent?.trim() || '';
+    const link = g('link') || n.querySelector('link')?.getAttribute('href') || '';
+    const img = n.querySelector('enclosure[type^="image"], media\\:content, content')?.getAttribute('url') || '';
+    return { title: g('title'), link, when: g('pubDate') || g('published') || g('updated'), source: g('source'), img };
+  });
+}
+async function fetchFeed(url){
+  try {
+    const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 9000);
+    try {
+      const r = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url), { signal: ctrl.signal, cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return parseRSS(await r.text());
+    } finally { clearTimeout(t); }
+  } catch (e) {
+    const j = await getJSON('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(url));
+    if (j.status !== 'ok' || !Array.isArray(j.items) || !j.items.length) throw new Error('relay failed');
+    return j.items.map(i => ({ title: i.title || '', link: i.link || '', when: (i.pubDate || '').replace(' ', 'T') + (i.pubDate && !/Z|[+-]\d\d:?\d\d$/.test(i.pubDate) ? 'Z' : ''), source: '', img: i.thumbnail || i.enclosure?.link || '' }));
+  }
+}
+
 const NEWS = { key: null, at: 0, items: null };
 function ago(iso){ const t = Date.parse(iso); if (!t) return ''; const m = Math.round((Date.now() - t) / 60000);
   return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : `${Math.round(m / 1440)} days ago`; }
@@ -1089,10 +1144,24 @@ async function loadNews(M){
       }
     }
   }
-  items = items.map(a => ({ ...a, team: storyTeam(a, M) })).filter(a => a.team);
+  items = items.map(a => ({ ...a, team: storyTeam(a, M), source: 'ESPN' })).filter(a => a.team);
+  NEWS.status = [{ name: 'ESPN', ok: items.length > 0 }];
+  if (!S.demo) {
+    const jobs = [];
+    [M.away, M.home].forEach(t => teamFeeds(t).forEach(f => jobs.push(fetchFeed(f.url).then(list => {
+      NEWS.status.push({ name: f.name, team: t, ok: true });
+      return list.filter(x => x.title).map(x => {
+        let headline = x.title, source = f.name;
+        if (f.google) { const i = headline.lastIndexOf(' - '); if (i > 10) { source = x.source || headline.slice(i + 3); headline = headline.slice(0, i); } else if (x.source) source = x.source; }
+        return { headline, desc: '', when: x.when, url: x.link, img: x.img, teamIds: [], team: t, source };
+      });
+    }).catch(() => { NEWS.status.push({ name: f.name, team: t, ok: false }); return []; }))));
+    (await Promise.all(jobs)).forEach(list => { items = items.concat(list); });
+  }
   const seen = new Set();
-  NEWS.items = items.filter(a => { const k = a.headline.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
-    .sort((a, b) => (Date.parse(b.when) || 0) - (Date.parse(a.when) || 0)).slice(0, 8);
+  const norm = h => h.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  NEWS.items = items.filter(a => { const k = norm(a.headline); if (!k || seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a, b) => (Date.parse(b.when) || 0) - (Date.parse(a.when) || 0)).slice(0, 12);
 }
 function renderTicker(M){
   const tk = $('ticker'), tr = $('ttrack');
@@ -1103,7 +1172,7 @@ function renderTicker(M){
   if (S.tickKey === key) return; // keep the scroll going smoothly between refreshes
   S.tickKey = key;
   const one = items.map(a => { const t = a.team ? (M.byId[a.team.id] || a.team) : null;
-    return `<a href="${esc(a.url || '#')}" target="_blank" rel="noopener noreferrer">${t ? `<span class="tm" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${t.color}"></span>` : ''}${esc(a.headline)}</a>`; }).join('');
+    return `<a href="${esc(a.url || '#')}" target="_blank" rel="noopener noreferrer">${t ? `<span class="tm" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${t.color}"></span>` : ''}${esc(a.headline)}${a.source ? ` <span style="color:var(--muted);font-size:12px">${esc(a.source)}</span>` : ''}</a>`; }).join('');
   tr.innerHTML = one + one.replace(/<a /g, '<a tabindex="-1" aria-hidden="true" ');
   const chars = items.reduce((n, a) => n + a.headline.length, 0);
   tr.style.setProperty('--dur', Math.max(25, Math.round(chars / 7)) + 's');
@@ -1111,13 +1180,15 @@ function renderTicker(M){
 $('ticker').addEventListener('touchstart', () => $('ticker').classList.toggle('paused'), { passive: true });
 function renderNews(M){
   renderTicker(M);
+  const st = NEWS.status || [];
+  $('newsSrc').innerHTML = st.length ? 'Sources: ' + st.map(x => `<span title="${x.ok ? 'Loaded' : 'Could not load right now'}">${esc(x.name)}${x.team && x.name === 'Google News' ? ' (' + esc(x.team.name) + ')' : ''} ${x.ok ? '✓' : '✗'}</span>`).join(' · ') : '';
   const box = $('news');
   if (NEWS.items === null) { box.innerHTML = '<div class="empty">Loading headlines…</div>'; return; }
   if (!NEWS.items.length) { box.innerHTML = `<div class="empty">${S.demo ? 'Headlines show up here on the live site.' : `No ${esc(M.away.name)} or ${esc(M.home.name)} headlines from ESPN right now.`}</div>`; return; }
   box.innerHTML = NEWS.items.map(a => {
     const t = a.team ? (M.byId[a.team.id] || a.team) : null;
     const inner = `${a.img ? `<img src="${esc(a.img)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;noimg&quot;></div>'">` : '<div class="noimg"></div>'}
-      <div style="min-width:0"><b>${esc(a.headline)}</b><small>${t ? `<span class="tm" style="background:${t.color}"></span>${esc(t.name)} · ` : ''}${esc(ago(a.when))}</small></div>`;
+      <div style="min-width:0"><b>${esc(a.headline)}</b><small>${t ? `<span class="tm" style="background:${t.color}"></span>${esc(t.name)} · ` : ''}${esc(a.source || '')}${a.when ? ' · ' + esc(ago(a.when)) : ''}</small></div>`;
     return a.url ? `<a class="newsitem" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer" title="${esc(a.desc)}">${inner}</a>` : `<div class="newsitem">${inner}</div>`;
   }).join('');
 }
