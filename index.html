@@ -328,8 +328,8 @@ function separateColors(keep, swap){
 const ordinal = n => ({1:'1st',2:'2nd',3:'3rd',4:'4th'}[n] || (n + 'th'));
 const qtr = p => p > 4 ? 'OT' : 'Q' + p;
 
-async function getJSON(url){
-  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 9000);
+async function getJSON(url, ms){
+  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), ms || 9000);
   try { const r = await fetch(url, { signal: ctrl.signal, cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
   finally { clearTimeout(t); }
 }
@@ -594,7 +594,7 @@ function drawDrive(D, M, uptoIdx){
     if (nx.kickType === 'xp') { p.pat = nx.kickGood ? 'Extra point good' : 'Extra point missed'; nx.mergedTry = true; }
     else if (/two-point/i.test(nx.type + ' ' + nx.text)) { p.pat = /succeeds|good/i.test(nx.text) && !/fail|no good/i.test(nx.text) ? '2-point try good' : '2-point try failed'; nx.mergedTry = true; }
   });
-  let list = D.plays.filter(p => p.drawable && !p.mergedTry);
+  let list = D.plays.filter(p => p.drawable && !p.mergedTry && (!D.tid || p.s.tid === D.tid || p.kickType));
   if (uptoIdx !== undefined) list = list.slice(0, uptoIdx + 1);
   const n = list.length; if (!n) return null;
   const top = 105, bot = 430;
@@ -740,8 +740,12 @@ function render(){
   // which drive is on the field
   if (!S.replay) {
     const viewing = S.viewDrive ? M.drives.find(d => d.id === S.viewDrive) : null;
-    const D = viewing || M.drives.find(d => d.id === M.currentDriveId) || (M.state !== 'pre' ? M.drives[M.drives.length - 1] : null);
-    S.shownDrive = D ? D.id : null;
+    let D = viewing || M.drives.find(d => d.id === M.currentDriveId) || (M.state !== 'pre' ? M.drives[M.drives.length - 1] : null);
+    // During a live game, if the other team now has the ball but the play-by-play hasn't started their drive yet,
+    // show a clean field with just the ball instead of drawing the old drive under the new team's ball.
+    const listDrive = D;
+    if (!viewing && isLive && live && D && D.tid && D.tid !== live.tid) D = null;
+    S.shownDrive = listDrive ? listDrive.id : null; // the play list keeps showing the last drive until the new one arrives
     const res = drawDrive(D, M);
     const selP = S.selPlay && D ? D.plays.find(p => p.id === S.selPlay) : null;
     if (selP && selP.s) {
@@ -1357,20 +1361,27 @@ async function selectGame(id){
 
 async function loadSummary(){
   if (!S.selId) return;
-  try { S.summary = await getJSON(`${API}/summary?event=${S.selId}`); } catch (e) { /* keep last */ }
+  // The play-by-play file is large; give it more time, and add a changing tag to the address so no
+  // in-between cache can hand back an older copy.
+  const id = S.selId;
+  try {
+    const j = await getJSON(`${API}/summary?event=${id}&_=${Math.floor(Date.now() / 5000)}`, 25000);
+    if (id === S.selId) { S.summary = j; S.summaryAt = Date.now(); }
+  } catch (e) { /* keep the last good copy and try again on the next refresh */ }
 }
 
 async function tick(){
   clearTimeout(S.timer);
   try {
-    const sb = await getJSON(`${API}/scoreboard`);
+    const sb = await getJSON(`${API}/scoreboard?_=${Math.floor(Date.now() / 5000)}`);
     S.events = sb.events || [];
     S.selId = pickDefault();
     await loadSummary();
     S.lastOk = Date.now();
     const ev = S.events.find(e => e.id === S.selId);
     const live = ev?.status?.type?.state === 'in';
-    setStatus(live ? 'Live · updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), live);
+    const lag = live && S.summaryAt && Date.now() - S.summaryAt > 45000;
+    setStatus(live ? (lag ? 'Live · plays catching up' : 'Live · updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })) : 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), live);
     if (!S.replay) render(); else renderChips();
     S.timer = setTimeout(tick, live ? 12000 : 60000);
   } catch (e) {
