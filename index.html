@@ -183,6 +183,7 @@ details.flag .st{font-weight:500;color:var(--muted)}
       <span><i style="background:#f5c542"></i>Score</span>
       <span><i style="background:#ff4d4d"></i>Turnover</span>
       <span><span class="flagic"></span>Penalty flag</span>
+      <span><i style="background:repeating-linear-gradient(90deg,#d7a22a 0 3px,transparent 3px 7px)"></i>Kick (field goal, extra point, punt)</span>
     </div>
     <div class="btns">
       <button class="b" id="replayBtn" type="button">Replay this drive</button>
@@ -400,11 +401,14 @@ function normPlay(p, d, M){
   const turnover = /interception|fumble.*(recovered by|lost)|intercepted/i.test(type + ' ' + text) && !/no play/i.test(text) || (s && e && s.tid !== e.tid && !/punt|kickoff|field goal|extra point|two-point/i.test(type + ' ' + text) && !/no play/i.test(text));
   const scoring = !!p.scoringPlay;
   const flags = parseFlags(text);
+  const tt = type + ' ' + text;
+  const kickType = /no play/i.test(text) ? null : /field goal/i.test(tt) ? 'fg' : /extra point|pat\b/i.test(tt) ? 'xp' : /punt/i.test(tt) ? 'punt' : null;
+  const kickGood = kickType === 'fg' || kickType === 'xp' ? (/is good/i.test(text) || (!!p.scoringPlay && !/no good|blocked/i.test(text))) : null;
   const penalty = flags.length > 0 || /penalty/i.test(type) || /no play/i.test(text);
   let gain = num(p.statYardage);
   if (gain === null && s && e && s.tid === e.tid) gain = s.yte - e.yte;
   return {
-    id: String(p.id ?? p.playId ?? Math.random()), type, text, s, e, kick, turnover, scoring, penalty, flags, gain, tid: s ? s.tid : d.tid,
+    id: String(p.id ?? p.playId ?? Math.random()), type, text, s, e, kick, turnover, scoring, penalty, flags, gain, kickType, kickGood, tid: s ? s.tid : d.tid,
     homeScore: p.homeScore ?? null, awayScore: p.awayScore ?? null, endDdt: (p.end && (p.end.downDistanceText || p.end.shortDownDistanceText)) || '', startPt: (p.start && (p.start.possessionText || p.start.downDistanceText)) || '',
     period: num(p.period?.number ?? p.period) || null, clock: p.clock?.displayValue || '',
     ddt: (p.start && (p.start.shortDownDistanceText || p.start.downDistanceText)) || '',
@@ -457,6 +461,8 @@ function drawStatic(){
       el('text', { x: X(y), y: yy, fill: 'var(--chalknum)', 'font-size': 44, 'font-family': 'Barlow Condensed, Arial Narrow, sans-serif', 'font-weight': 600, 'text-anchor': 'middle', 'dominant-baseline': 'middle', transform: rot ? `rotate(180 ${X(y)} ${yy})` : '' }, svg).textContent = lbl;
     });
   }
+  // goal posts at the back of each end zone (seen from above: a yellow crossbar)
+  [6, 1194].forEach(x => { el('rect', { x: x - 4, y: 238, width: 8, height: 57, rx: 3, fill: '#facc15', stroke: 'rgba(0,0,0,.4)', 'stroke-width': 1 }, svg); });
   S.dyn = el('g', {}, svg);
   // LOS and first-down lines
   S.fdG = el('g', { class: 'lineg' }, svg);
@@ -505,7 +511,26 @@ function drawDrive(D, M, uptoIdx){
     g.addEventListener('click', () => { if (S.replay) return; S.selPlay = p.id; render(); openPlay(p, D); });
     el('circle', { cx: X(p.s.x), cy: y, r: 5, fill: KC[k] }, g);
     const x1 = X(p.s.x), x2 = X(p.e.x);
-    if (Math.abs(x2 - x1) < 6) {
+    if (p.kickType) {
+      const dir = dirOf(p.s.tid, M);
+      const tx = p.kickType === 'punt' ? (p.e ? X(p.e.x) : x1 + dir * 400) : (dir > 0 ? X(110) - 6 : X(-10) + 6);
+      const col = p.kickType === 'punt' ? '#cfe3ff' : p.kickGood ? '#f5c542' : '#b8c2cc';
+      const lift = Math.min(70, Math.max(30, Math.abs(tx - x1) * .25));
+      const mx = (x1 + tx) / 2;
+      el('path', { d: `M${x1},${y} Q${mx},${y - lift * 2} ${tx},${y}`, fill: 'none', stroke: 'rgba(0,0,0,.35)', 'stroke-width': 7, 'stroke-linecap': 'round' }, g);
+      el('path', { d: `M${x1},${y} Q${mx},${y - lift * 2} ${tx},${y}`, fill: 'none', stroke: col, 'stroke-width': sel ? 5 : 4, 'stroke-dasharray': '3 9', 'stroke-linecap': 'round' }, g);
+      if (p.kickType !== 'punt') {
+        const ok = p.kickGood;
+        el('circle', { cx: tx, cy: y, r: 13, fill: ok ? '#f5c542' : '#475569', stroke: '#111', 'stroke-width': 1.5 }, g);
+        const mk = el('text', { x: tx, y: y + 1, 'font-size': 17, 'font-weight': 800, 'text-anchor': 'middle', 'dominant-baseline': 'middle', fill: ok ? '#111' : '#fff', 'font-family': 'Inter, sans-serif' }, g);
+        mk.textContent = ok ? '✓' : '✗';
+      } else {
+        el('circle', { cx: tx, cy: y, r: 6, fill: col }, g);
+      }
+      const lbl = p.kickType === 'fg' ? (p.kickGood ? 'Field goal · good, 3 pts' : 'Field goal · missed') : p.kickType === 'xp' ? (p.kickGood ? 'Extra point · good' : 'Extra point · missed') : 'Punt';
+      const lt = el('text', { x: mx, y: y - lift - 8, fill: '#fff', 'font-size': 16, 'font-family': 'Inter, sans-serif', 'font-weight': 700, 'text-anchor': 'middle', 'paint-order': 'stroke', stroke: 'rgba(0,0,0,.55)', 'stroke-width': 4 }, g);
+      lt.textContent = '🦶 ' + lbl;
+    } else if (Math.abs(x2 - x1) < 6) {
       el('circle', { cx: x1, cy: y, r: 9, fill: 'none', stroke: KC[k], 'stroke-width': 3 }, g);
     } else {
       el('line', { x1, x2, y1: y, y2: y, stroke: 'rgba(0,0,0,.35)', 'stroke-width': sel ? 11 : 9, 'stroke-linecap': 'round' }, g);
@@ -667,7 +692,9 @@ function renderDrives(M){
 }
 
 function keyTag(p){
-  if (p.scoring) return ['Score', 'var(--gold)'];
+  if (p.kickType === 'fg' && p.kickGood) return ['Field goal', 'var(--gold)'];
+  if (p.scoring && p.kickType === 'xp') return null;
+  if (p.scoring) return [/touchdown/i.test(p.text) ? 'Touchdown' : 'Score', 'var(--gold)'];
   if (p.turnover || /intercepted|interception/i.test(p.text)) return ['Turnover', '#ef4444'];
   if (/field goal is (no good|blocked)/i.test(p.text)) return ['Missed kick', 'var(--muted)'];
   if (/FUMBLES/i.test(p.text)) return ['Fumble', '#ef4444'];
@@ -909,7 +936,9 @@ function spotText(sp, M){
   return sp.yte > 50 ? `${off.abbr} ${100 - sp.yte} (own side)` : `${def ? def.abbr : 'Opp'} ${sp.yte}`;
 }
 function playKind(p){
-  if (p.scoring) return 'Scoring play';
+  if (p.kickType === 'fg') return p.kickGood ? 'Field goal, good' : 'Field goal, missed';
+  if (p.kickType === 'xp') return p.kickGood ? 'Extra point, good' : 'Extra point, missed';
+  if (p.scoring) return /touchdown/i.test(p.text) ? 'Touchdown!' : 'Scoring play';
   if (p.turnover) return 'Turnover';
   if (/no play/i.test(p.text)) return 'Penalty, play wiped out';
   if (p.kick) return 'Kickoff';
