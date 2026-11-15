@@ -123,6 +123,21 @@ details.flag .st{font-weight:500;color:var(--muted)}
 .popmini em{position:absolute;top:11px;height:4px;border-radius:2px}
 .popmini u{position:absolute;top:6px;width:14px;height:14px;border-radius:50%;margin-left:-7px;border:2px solid #fff}
 .popact{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.pn{white-space:nowrap;font-weight:600}
+.pn::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--tc);box-shadow:0 0 0 1.5px var(--panel),0 0 0 2.5px var(--tc);margin:0 5px 1px 1px;vertical-align:middle}
+.pn small{font-weight:600;font-size:10px;color:var(--muted);margin-left:3px;letter-spacing:.03em}
+.rtabs{display:flex;gap:6px;flex-wrap:wrap}
+.rtab{font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:999px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.rtab i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.rtab[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.rsearch{font:inherit;font-size:14px;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);width:100%;max-width:280px}
+.rgroups{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px 20px}
+.rgroup h4{margin:0 0 4px;font-family:var(--display);font-size:16px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.rrow{display:grid;grid-template-columns:34px 1fr auto;gap:8px;padding:4px 0;border-top:1px solid var(--line);font-size:14px;align-items:baseline}
+.rrow .no{font-family:var(--display);font-weight:700;font-size:16px;font-variant-numeric:tabular-nums;text-align:right;color:var(--tcol)}
+.rrow .pos{font-size:12px;color:var(--muted);font-weight:600}
+.rrow.hit{background:color-mix(in srgb,var(--fd) 18%,transparent)}
+.topright{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .empty{color:var(--muted);font-size:14px;padding:8px 0}
 .foot{font-size:12px;color:var(--muted)}
 .foot a{color:var(--accent)}
@@ -142,7 +157,8 @@ details.flag .st{font-weight:500;color:var(--muted)}
 <div class="wrap">
   <div class="top">
     <h1>Field View</h1>
-    <div class="status"><span class="dot" id="dot"></span><span id="statusText">Loading games…</span></div>
+    <div class="topright"><div class="status"><span class="dot" id="dot"></span><span id="statusText">Loading games…</span></div>
+      <button class="b" type="button" id="refreshBtn">Refresh now</button></div>
   </div>
   <div class="banner" id="banner" hidden></div>
   <div class="games" id="games" role="group" aria-label="Choose a game"></div>
@@ -192,6 +208,14 @@ details.flag .st{font-weight:500;color:var(--muted)}
       <div class="plays" id="plays"></div>
     </section>
   </div>
+  <section class="card" id="rosterCard">
+    <h2>Rosters</h2>
+    <div class="sub">Who's who on each team. Player names in the plays have a dot in their team's color.</div>
+    <div class="rtabs" id="rtabs"></div>
+    <input class="rsearch" id="rsearch" type="search" placeholder="Find a player or number" aria-label="Find a player">
+    <div class="rgroups" id="rlist"><div class="empty">Rosters load once a game is picked.</div></div>
+  </section>
+
   <div class="pop" id="pop" hidden role="dialog" aria-modal="true" aria-labelledby="popTitle"><div class="popcard" id="popCard"></div></div>
   <div class="foot">Live data comes from ESPN's public scoreboard feed and refreshes every 12 seconds during a game. It runs a few seconds behind TV.</div>
 </div>
@@ -538,7 +562,7 @@ function render(){
   $('lpLabel').textContent = M.state === 'post' ? 'Final play' : 'Last play';
   const lastP = allPlays.length ? allPlays[allPlays.length - 1] : null;
   const lpPlain = lastP && (!M.sit.lastPlay?.text || cleanText(M.sit.lastPlay.text) === cleanText(lastP.text)) ? `${quarterLong(lastP.period, lastP.clock)}: ${describe(lastP, M)}` : cleanText(lp);
-  $('lastPlay').textContent = lpPlain || (M.state === 'pre' ? 'The game hasn\'t started yet.' : 'Waiting for the next play.');
+  $('lastPlay').innerHTML = lpPlain ? richText(lpPlain, M) : esc(M.state === 'pre' ? 'The game hasn\'t started yet.' : 'Waiting for the next play.');
   $('lpFlag').innerHTML = parseFlags(lp).map((f, i) => flagDetails(f, M, 'lp' + i + lp.length)).join('');
   const tally = {}; [M.away, M.home].forEach(t => tally[t.abbr] = { n: 0, y: 0 });
   allPlays.forEach(p => (p.flags || []).forEach(f => { if (f.status === 'accepted' && tally[f.team]) { tally[f.team].n++; tally[f.team].y += f.yards || 0; } }));
@@ -572,6 +596,8 @@ function render(){
   renderDrives(M);
   renderPlays(M);
   renderKeys(M);
+  renderRoster(M);
+  if ([M.away, M.home].some(t => !(t.id in ROSTERS)) && !S.rLoading && !S.demo) { S.rLoading = true; loadRosters(M).then(() => { S.rLoading = false; if (!S.replay) render(); }); }
 }
 
 function renderChips(){
@@ -632,7 +658,7 @@ function renderKeys(M){
     const wrap = document.createElement('div'); wrap.className = 'play';
     const b = document.createElement('button'); b.type = 'button'; b.className = 'playmain';
     b.innerHTML = `<div class="when"><span style="display:inline-block;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#fff;background:${k[1]};border-radius:4px;padding:1px 6px">${esc(k[0])}</span></div>
-      <div><div class="sit">${esc(quarterLong(p.period, p.clock))}</div><div class="txt">${esc(describe(p, M))}</div></div>`;
+      <div><div class="sit">${esc(quarterLong(p.period, p.clock))}</div><div class="txt">${richText(describe(p, M), M)}</div></div>`;
     b.onclick = () => { stopReplay(); if (p.s) { S.selPlay = p.id; S.viewDrive = D.id === M.currentDriveId && M.state === 'in' ? null : D.id; render(); } openPlay(p, D); };
     wrap.appendChild(b); box.appendChild(wrap);
   });
@@ -649,7 +675,7 @@ function renderPlays(M){
     wrap.className = 'play' + (p.id === S.selPlay ? ' sel' : '') + (p.scoring ? ' scoring' : '');
     const b = document.createElement('button'); b.type = 'button'; b.className = 'playmain';
     b.innerHTML = `<div class="when">${p.period ? qtr(p.period) : ''} ${esc(p.clock)}</div>
-      <div>${p.ddt ? `<div class="sit">${esc(p.ddt)}</div>` : ''}<div class="txt">${esc(describe(p, M))}</div></div>`;
+      <div>${p.ddt ? `<div class="sit">${esc(p.ddt)}</div>` : ''}<div class="txt">${richText(describe(p, M), M)}</div></div>`;
     b.onclick = () => { stopReplay(); if (p.s) { S.selPlay = p.id; if (D.id !== M.currentDriveId) S.viewDrive = D.id; render(); } openPlay(p, D); };
     wrap.appendChild(b);
     if (p.flags && p.flags.length) wrap.insertAdjacentHTML('beforeend', p.flags.map((f, i) => flagDetails(f, M, p.id + ':' + i)).join(''));
@@ -773,6 +799,81 @@ function withFlagNote(p, M, base){
 }
 function describe(p, M){ try { return withFlagNote(p, M, plainPlay(p, M)) || p.text; } catch (e) { return p.text; } }
 
+/* ---------- rosters & player names ---------- */
+const ROSTERS = {}; // teamId -> [{first,last,full,jersey,pos,posName,group}]
+const SUFFIX = /\s+(Jr\.?|Sr\.?|II|III|IV|V)$/i;
+function normRoster(json){
+  const out = [];
+  const groups = Array.isArray(json?.athletes) ? json.athletes : [];
+  const push = (a, group) => {
+    if (!a) return;
+    const full = a.fullName || a.displayName || '';
+    const parts = full.replace(SUFFIX, '').split(' ');
+    out.push({ first: a.firstName || parts[0] || '', last: (a.lastName || parts.slice(1).join(' ') || '').replace(SUFFIX, ''), full,
+      jersey: a.jersey ?? '', pos: a.position?.abbreviation || '', posName: a.position?.displayName || a.position?.name || '', group: group || '' });
+  };
+  groups.forEach(g => { if (Array.isArray(g.items)) g.items.forEach(a => push(a, g.position || g.name)); else push(g, g.position?.parent?.name || ''); });
+  return out;
+}
+async function loadRosters(M){
+  for (const t of [M.away, M.home]) {
+    if (ROSTERS[t.id] || S.demo) continue;
+    try { ROSTERS[t.id] = normRoster(await getJSON(`${API}/teams/${t.id}/roster`)); } catch (e) { ROSTERS[t.id] = null; }
+  }
+}
+function findPlayer(name, M){
+  const m = name.match(/^([A-Za-z']+)\.\s?(.+)$/); if (!m) return null;
+  const ini = m[1].toLowerCase(), last = m[2].replace(SUFFIX, '').toLowerCase();
+  const hits = [];
+  [M.away, M.home].forEach(t => (ROSTERS[t.id] || []).forEach(a => {
+    if (a.last.toLowerCase() === last && a.first.toLowerCase().startsWith(ini)) hits.push({ ...a, team: t });
+  }));
+  if (!hits.length) return null;
+  if (hits.length > 1 && hits.some(h => h.team.id !== hits[0].team.id)) return null;
+  return hits[0];
+}
+function richText(text, M){
+  let html = esc(text);
+  if (!M) return html;
+  return html.replace(new RegExp(`\\b(${NM})`, 'g'), raw => {
+    const poss = /'s$/.test(raw) ? "'s" : '';
+    const nm = poss ? raw.slice(0, -2) : raw;
+    const pl = findPlayer(nm, M);
+    if (!pl) return raw;
+    const tip = `${pl.full}${pl.jersey !== '' ? ' #' + pl.jersey : ''}, ${pl.posName || pl.pos}, ${pl.team.full || pl.team.name}`;
+    return `<span class="pn" style="--tc:${pl.team.color}" title="${esc(tip)}">${nm}${pl.pos ? `<small>${esc(pl.team.abbr)} ${esc(pl.pos)}</small>` : ''}</span>${poss}`;
+  }).replace(/\bQB (<span class="pn")/g, '$1');
+}
+const GROUP_ORDER = ['offense', 'defense', 'specialTeam', 'special teams'];
+function groupLabel(g){ g = String(g || '').toLowerCase(); return g.startsWith('off') ? 'Offense' : g.startsWith('def') ? 'Defense' : g.startsWith('spec') ? 'Special teams' : (g ? g[0].toUpperCase() + g.slice(1) : 'Players'); }
+function renderRoster(M){
+  const tabs = $('rtabs');
+  if (!S.rTeam || !M.byId[S.rTeam]) S.rTeam = (Object.values(M.byId).find(t => t.abbr === FAV) || M.away).id;
+  tabs.innerHTML = '';
+  [M.away, M.home].forEach(t => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'rtab'; b.setAttribute('aria-pressed', t.id === S.rTeam);
+    b.innerHTML = `<i style="background:${t.color}"></i>${esc(t.name)}`;
+    b.onclick = () => { S.rTeam = t.id; renderRoster(M); };
+    tabs.appendChild(b);
+  });
+  const t = M.byId[S.rTeam]; const list = ROSTERS[t.id];
+  const box = $('rlist');
+  if (list === undefined) { box.innerHTML = '<div class="empty">Loading roster…</div>'; return; }
+  if (!list || !list.length) { box.innerHTML = '<div class="empty">ESPN didn\'t send a roster for this team right now. Try Refresh now in a minute.</div>'; return; }
+  const q = ($('rsearch').value || '').trim().toLowerCase();
+  const groups = {};
+  list.forEach(a => { const k = groupLabel(a.group); (groups[k] = groups[k] || []).push(a); });
+  box.innerHTML = Object.keys(groups).sort((a, b) => ['Offense','Defense','Special teams'].indexOf(a) - ['Offense','Defense','Special teams'].indexOf(b)).map(k => {
+    const rows = groups[k].slice().sort((a, b) => (+a.jersey || 999) - (+b.jersey || 999)).map(a => {
+      const hit = q && (a.full.toLowerCase().includes(q) || String(a.jersey) === q);
+      if (q && !hit) return '';
+      return `<div class="rrow${hit ? ' hit' : ''}" style="--tcol:${t.color}"><span class="no">${esc(a.jersey)}</span><span>${esc(a.full)}</span><span class="pos" title="${esc(a.posName)}">${esc(a.pos)}</span></div>`;
+    }).join('');
+    return rows ? `<div class="rgroup"><h4>${esc(k)}</h4>${rows}</div>` : '';
+  }).join('') || '<div class="empty">No player matches that.</div>';
+}
+$('rsearch').addEventListener('input', () => S.M && renderRoster(S.M));
+
 /* ---------- play details popup ---------- */
 function spotText(sp, M){
   if (!sp) return '—';
@@ -827,7 +928,7 @@ function openPlay(p, D){
     </div>
     <div class="popbody">
       ${mini}
-      <p class="poptext">${esc(describe(p, M))}</p>
+      <p class="poptext">${richText(describe(p, M), M)}</p>
       <div class="sub" style="margin:0;font-size:12px;color:var(--muted)">Official play-by-play: ${esc(cleanText(p.text))}</div>
       <div class="popgrid">${cells.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
       ${(p.flags || []).map((f, i) => flagDetails(f, M, 'pop' + p.id + i).replace('<details class="flag"', '<details open class="flag"')).join('')}
@@ -862,7 +963,7 @@ function startReplay(){
     placeLines(p.s.x, p.s.dist && p.s.dist < p.s.yte ? p.s.x + dir * p.s.dist : null);
     placeBall(p.e.x, res ? res.y : 266);
     $('lpLabel').textContent = (p.ddt || 'Play').replace(/ at .*/, '');
-    $('lastPlay').textContent = describe(p, M);
+    $('lastPlay').innerHTML = richText(describe(p, M), M);
     $('lpFlag').innerHTML = (p.flags || []).map((f, i) => flagDetails(f, M, 'r' + p.id + i)).join('');
   }, 1700);
 }
@@ -962,12 +1063,25 @@ function startDemo(){
       { homeAway: 'home', score: '0', team: TEN, record: [{ summary: 'Example' }] }],
       situation: { possession: '30', down: 1, distance: 10, possessionText: 'TEN 18', downDistanceText: '1st & 10 at TEN 18', isRedZone: true, awayTimeouts: 3, homeTimeouts: 3, lastPlay: { text: d2[d2.length-1].text } } }] }];
   S.summary = { drives: { previous: [drives[0]], current: drives[1] } };
+  const R = (arr, grp) => arr.map(([j, f, l, pos, pn]) => ({ first: f, last: l, full: f + ' ' + l, jersey: j, pos, posName: pn, group: grp }));
+  ROSTERS['30'] = [...R([[16,'Trevor','Lawrence','QB','Quarterback'],[1,'Travis','Etienne Jr.','RB','Running Back'],[7,'Brian','Thomas Jr.','WR','Wide Receiver'],[12,'Travis','Hunter','WR','Wide Receiver'],[85,'Brenton','Strange','TE','Tight End'],[33,'Bhayshul','Tuten','RB','Running Back'],[71,'Cole','Robinson','OT','Offensive Tackle']], 'offense'),
+    ...R([[2,'Devin','Lloyd','LB','Linebacker'],[41,'Josh','Hines-Allen','DE','Defensive End']], 'defense')];
+  ROSTERS['10'] = [...R([[1,'Cam','Ward','QB','Quarterback'],[0,'Calvin','Ridley','WR','Wide Receiver'],[9,'Tyjae','Spears','RB','Running Back'],[20,'Tony','Pollard','RB','Running Back'],[11,'Treylon','Burks','WR','Wide Receiver']], 'offense'),
+    ...R([[94,'Jeffery','Simmons','DT','Defensive Tackle']], 'defense'), ...R([[4,'Johnny','Stonehouse','P','Punter']], 'specialTeam')];
   S.selId = 'demo';
   render();
   setTimeout(startReplay, 900);
 }
 
-window.__fv = { describe, parseFlags };
+window.__fv = { describe, parseFlags, richText, get M(){ return S.M; } };
+$('refreshBtn').onclick = async () => {
+  const b = $('refreshBtn'); if (b.disabled) return;
+  b.disabled = true; b.textContent = 'Refreshing…';
+  Object.keys(ROSTERS).forEach(k => { if (ROSTERS[k] === null) delete ROSTERS[k]; });
+  if (S.demo) { S.demo = false; S.lastOk = 0; $('banner').hidden = true; stopReplay(); }
+  await tick();
+  b.disabled = false; b.textContent = 'Refresh now';
+};
 drawStatic();
 setStatus('Loading games…', false);
 tick();
