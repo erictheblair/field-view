@@ -41,8 +41,18 @@ h2{font-size:20px;text-transform:uppercase;letter-spacing:.06em}
 .banner{background:var(--panel);border:1px solid var(--gold);border-radius:10px;padding:12px 14px;font-size:14px}
 .banner b{color:var(--fg)}
 .games{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
-.chip{flex:0 0 auto;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px;cursor:pointer;display:grid;gap:1px;text-align:left;font-variant-numeric:tabular-nums}
+.chip{flex:0 0 auto;min-width:118px;border:1px solid var(--line);border-left:5px solid var(--stripe,transparent);background:var(--panel);color:var(--fg);border-radius:8px;padding:6px 10px 6px 8px;font:inherit;font-size:13px;cursor:pointer;display:grid;gap:2px;text-align:left;font-variant-numeric:tabular-nums}
 .chip small{color:var(--muted);font-size:11px}
+.chip .ctop{display:flex;align-items:center;gap:6px;justify-content:space-between;min-height:16px}
+.chip .tr{display:flex;justify-content:space-between;gap:12px}
+.chip .tr.win{font-weight:700}
+.chip.pre .tr{color:var(--fg)}
+.chip.post{background:color-mix(in srgb,var(--fg) 6%,var(--panel))}
+.chip.post .tr:not(.win){color:var(--muted)}
+.chip .final{font-weight:800;font-size:11px;letter-spacing:.08em;background:var(--fg);color:var(--panel);border-radius:4px;padding:1px 6px}
+.chip .live{display:inline-flex;align-items:center;gap:5px;font-weight:800;font-size:11px;letter-spacing:.08em;color:#dc2626}
+.chip .live i{width:8px;height:8px;border-radius:50%;background:#dc2626;animation:pulse-red 1.6s infinite}
+@keyframes pulse-red{0%{box-shadow:0 0 0 0 rgba(220,38,38,.6)}70%{box-shadow:0 0 0 7px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}
 .chip[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .chip:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .bug{display:grid;grid-template-columns:1fr auto 1fr;align-items:stretch;background:#0f1a18;color:#fff;border-radius:12px;overflow:hidden}
@@ -762,18 +772,39 @@ function render(){
 function renderChips(){
   const box = $('games');
   if (!S.events.length) { box.innerHTML = ''; return; }
+  const keep = box.scrollLeft;
   box.innerHTML = '';
-  S.events.forEach(e => {
+  const rank = { in: 0, pre: 1, post: 2 };
+  const evs = S.events.slice().sort((x, y) => (rank[x.status?.type?.state] ?? 1) - (rank[y.status?.type?.state] ?? 1) || (Date.parse(x.date) || 0) - (Date.parse(y.date) || 0));
+  evs.forEach(e => {
     const c = e.competitions?.[0]; if (!c) return;
     const a = c.competitors.find(x => x.homeAway === 'away'), h = c.competitors.find(x => x.homeAway === 'home');
+    if (!a || !h) return;
+    const state = e.status?.type?.state || 'pre';
+    const d = e.date ? new Date(e.date) : null;
+    const day = d ? d.toLocaleDateString([], { weekday: 'short', month: 'numeric', day: 'numeric' }) : '';
+    const sa = +a.score || 0, sh = +h.score || 0;
+    const lead = state === 'pre' || sa === sh ? null : (sa > sh ? a : h);
+    const stripe = lead ? readable({ color: hex(lead.team?.color), alt: hex(lead.team?.alternateColor) }) : 'transparent';
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'chip'; b.setAttribute('aria-pressed', e.id === S.selId);
-    const state = e.status?.type?.state;
-    const sc = state === 'pre' ? '' : ` ${a.score}-${h.score}`;
-    b.innerHTML = `<span>${esc(a.team.abbreviation)} @ ${esc(h.team.abbreviation)}${esc(sc)}</span><small>${esc(e.status?.type?.shortDetail || '')}</small>`;
+    b.type = 'button'; b.className = 'chip ' + state; b.setAttribute('aria-pressed', e.id === S.selId);
+    b.style.setProperty('--stripe', stripe);
+    let top;
+    if (state === 'in') top = `<span class="live"><i></i>LIVE</span><small>${esc(e.status?.type?.shortDetail || '')}</small>`;
+    else if (state === 'post') top = `<span class="final">FINAL</span><small>${esc(day)}</small>`;
+    else top = `<small>${esc(day)}${d ? ' · ' + esc(d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) : ''}</small>`;
+    const row = (t, sc) => {
+      const win = lead === t, trophy = win && state === 'post';
+      return `<span class="tr${win ? ' win' : ''}"><span>${esc(t.team?.abbreviation || '?')}${trophy ? ' 🏆' : ''}</span>${state === 'pre' ? '' : `<span>${esc(sc)}</span>`}</span>`;
+    };
+    b.innerHTML = `<span class="ctop">${top}</span>${row(a, a.score)}${row(h, h.score)}`;
+    const label = state === 'post' ? `Final: ${a.team?.displayName || a.team?.abbreviation} ${a.score}, ${h.team?.displayName || h.team?.abbreviation} ${h.score}` :
+      state === 'in' ? `Live: ${a.team?.abbreviation} ${a.score}, ${h.team?.abbreviation} ${h.score}, ${e.status?.type?.shortDetail || ''}` : `${a.team?.abbreviation} at ${h.team?.abbreviation}, ${day}`;
+    b.setAttribute('aria-label', label);
     b.onclick = () => selectGame(e.id);
     box.appendChild(b);
   });
+  box.scrollLeft = keep;
 }
 
 function renderDrives(M){
