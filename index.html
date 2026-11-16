@@ -79,6 +79,8 @@ h2{font-size:20px;text-transform:uppercase;letter-spacing:.06em}
 .fieldbox{position:relative;border-radius:12px;overflow:hidden;background:var(--turf);box-shadow:0 1px 0 var(--line)}
 .fieldbox svg{display:block;width:100%;height:auto}
 .fieldbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.fieldctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:-8px}
+.fieldctl .btns{margin-left:auto}
 .fieldhint{display:none;font-size:12px;color:var(--muted)}
 .weekbar{display:flex;align-items:center;gap:10px;margin-bottom:-8px}
 .weekbar .wlbl{font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;font-weight:700;font-size:13px;color:var(--muted)}
@@ -290,7 +292,15 @@ body.theater .tvpop.back{bottom:7.5%}
 
   <div class="fieldbox"><svg id="field" viewBox="0 0 1200 533" role="img" aria-label="Football field showing ball position and the plays of the drive"></svg><div class="tvpop" id="tvPop" aria-live="polite"></div></div>
   <div class="tvx"><button type="button" id="tvExit">✕ Exit theater</button></div>
+  <div class="fieldctl">
   <div class="fieldhint"><span id="followTxt">The field follows the ball. Swipe to look around.</span> <button type="button" class="followbtn" id="followBtn" hidden>⌖ Follow ball</button></div>
+    <div class="btns">
+      <button class="b" id="replayBtn" type="button">Replay this drive</button>
+      <button class="b icon" type="button" id="flipBtn" aria-label="Flip field direction" title="Flip the field to match the TV"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h15"/><path d="M15 4l4 4-4 4"/><path d="M20 16H5"/><path d="M9 12l-4 4 4 4"/></svg></button>
+      <button class="b icon" type="button" id="refreshBtn" aria-label="Refresh now" title="Refresh now"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg></button>
+      <button class="b primary" id="liveBtn" type="button" hidden>Back to live</button>
+    </div>
+  </div>
     <div class="lastplay"><span class="lbl" id="lpLabel">Last play</span><div class="lpbody"><p id="lastPlay">Waiting for the first snap.</p><div id="lpFlag"></div></div></div>
   <div class="fieldbar">
     <div class="legend">
@@ -303,12 +313,6 @@ body.theater .tvpop.back{bottom:7.5%}
       <span><span class="flagic"></span>Penalty flag</span>
       <span><span class="fdtag" style="margin:0">1ST DOWN</span>First down earned</span>
       <span><i style="background:repeating-linear-gradient(90deg,#d7a22a 0 3px,transparent 3px 7px)"></i>Kick (field goal, extra point, punt)</span>
-    </div>
-    <div class="btns">
-      <button class="b" id="replayBtn" type="button">Replay this drive</button>
-      <button class="b icon" type="button" id="flipBtn" aria-label="Flip field direction" title="Flip the field to match the TV"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h15"/><path d="M15 4l4 4-4 4"/><path d="M20 16H5"/><path d="M9 12l-4 4 4 4"/></svg></button>
-      <button class="b icon" type="button" id="refreshBtn" aria-label="Refresh now" title="Refresh now"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg></button>
-      <button class="b primary" id="liveBtn" type="button" hidden>Back to live</button>
     </div>
   </div>
 
@@ -1646,7 +1650,7 @@ $('weekBtn').onclick = () => { S.weekOffset = S.weekOffset ? 0 : 1; S.selId = nu
 
 /* ---------- app updates ---------- */
 // BUILD changes with every upload; the page checks the live copy for a newer BUILD (home-screen apps can't pull to refresh)
-const BUILD = '2026-11-16c';
+const BUILD = '2026-11-16d';
 function hardReload(){ const u = new URL(location.href); u.searchParams.set('v', Date.now().toString(36)); location.replace(u.toString()); }
 async function checkUpdate(){
   if (S.demo || location.protocol === 'file:') return;
