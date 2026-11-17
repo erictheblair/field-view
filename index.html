@@ -81,6 +81,14 @@ h2{font-size:20px;text-transform:uppercase;letter-spacing:.06em}
 .fieldbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
 .fieldctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:-8px}
 .fieldctl .btns{margin-left:auto}
+.navbtns{display:flex;align-items:center;gap:8px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg .b{border:0;border-radius:0;border-right:1px solid var(--line)}.seg .b:last-child{border-right:0}
+.b.livebtn{display:inline-flex;align-items:center;gap:6px;font-weight:800;letter-spacing:.06em;font-size:12px;color:#dc2626;border-color:#dc2626}
+.livebtn i{width:8px;height:8px;border-radius:50%;background:currentColor}
+.b.livebtn.on{background:#dc2626;color:#fff;cursor:default}
+.livebtn.on i{background:#fff;animation:pulse-red 1.6s infinite}
+.lpback{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;color:#111;background:#cbd5d1;border-radius:4px;padding:1px 6px;margin-left:8px;vertical-align:2px}
 .fieldhint{display:none;font-size:12px;color:var(--muted)}
 .weekbar{display:flex;align-items:center;gap:10px;margin-bottom:-8px}
 .weekbar .wlbl{font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;font-weight:700;font-size:13px;color:var(--muted)}
@@ -294,6 +302,10 @@ body.theater .tvpop.back{bottom:7.5%}
   <div class="tvx"><button type="button" id="tvExit">✕ Exit theater</button></div>
   <div class="fieldctl">
   <div class="fieldhint"><span id="followTxt">The field follows the ball. Swipe to look around.</span> <button type="button" class="followbtn" id="followBtn" hidden>⌖ Follow ball</button></div>
+    <div class="navbtns">
+      <span class="seg"><button class="b icon" type="button" id="navPD" aria-label="Previous drive" title="Previous drive"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5l-7 7 7 7"/><path d="M19 5l-7 7 7 7"/></svg></button><button class="b icon" type="button" id="navPP" aria-label="Previous play" title="Previous play"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><button class="b icon" type="button" id="navNP" aria-label="Next play" title="Next play"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button><button class="b icon" type="button" id="navND" aria-label="Next drive" title="Next drive"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l7 7-7 7"/><path d="M12 5l7 7-7 7"/></svg></button></span>
+      <button class="b livebtn" type="button" id="navLive"><i></i>LIVE</button>
+    </div>
     <div class="btns">
       <button class="b" id="replayBtn" type="button">Replay this drive</button>
       <button class="b icon" type="button" id="flipBtn" aria-label="Flip field direction" title="Flip the field to match the TV"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h15"/><path d="M15 4l4 4-4 4"/><path d="M20 16H5"/><path d="M9 12l-4 4 4 4"/></svg></button>
@@ -712,7 +724,7 @@ function drawDrive(D, M, uptoIdx){
     const sel = S.selPlay === p.id;
     const g = el('g', { opacity: S.selPlay && !sel ? .45 : 1, style: 'cursor:pointer' }, S.dyn);
     el('rect', { x: Math.min(X(p.s.x), X(p.e.x)) - 14, y: y - 15, width: Math.abs(X(p.e.x) - X(p.s.x)) + 28, height: 30, fill: 'transparent' }, g);
-    g.addEventListener('click', () => { if (S.replay) return; S.selPlay = p.id; render(); openPlay(p, D); });
+    g.addEventListener('click', () => { if (S.replay) return; TV.idx = null; S.selPlay = p.id; render(); openPlay(p, D); });
     el('circle', { cx: X(p.s.x), cy: y, r: 5, fill: KC[k] }, g);
     const x1 = X(p.s.x), x2 = X(p.e.x);
     if (p.kickType) {
@@ -852,6 +864,10 @@ function render(){
   const lastP = allPlays.length ? allPlays[allPlays.length - 1] : null;
   const lpPlain = lastP && (!M.sit.lastPlay?.text || cleanText(M.sit.lastPlay.text) === cleanText(lastP.text)) ? `${quarterLong(lastP.period, lastP.clock)}: ${describe(lastP, M)}` : cleanText(lp);
   $('lastPlay').innerHTML = lpPlain ? richText(lpPlain, M) : esc(M.state === 'pre' ? 'The game hasn\'t started yet.' : 'Waiting for the next play.');
+  { const L = tvList(M); if (TV.idx !== null && TV.idx >= L.length - 1) TV.idx = null;
+    if (TV.idx !== null && !TV.on) { const sp = L[TV.idx].p, ids = [...new Set(L.map(x => x.D.id))], db = ids.length - 1 - ids.indexOf(L[TV.idx].D.id), ahead = L.length - 1 - TV.idx;
+      $('lpLabel').innerHTML = (sp.ddt ? esc(sp.ddt.replace(/ at .*/, '')) : 'Play') + `<span class="lpback">⏪ ${db > 0 ? `${db} drive${db === 1 ? '' : 's'} back` : `${ahead} play${ahead === 1 ? '' : 's'} back`}</span>`;
+      $('lastPlay').innerHTML = richText(`${quarterLong(sp.period, sp.clock)}: ${describe(sp, M)}`, M); } }
   $('lpFlag').innerHTML = parseFlags(lp).map((f, i) => flagDetails(f, M, 'lp' + i + lp.length)).join('');
   tvUpdate(M, lastP && lpPlain && lpPlain.includes(describe(lastP, M)) ? lastP : null, lpPlain);
   const tally = {}; [M.away, M.home].forEach(t => tally[t.abbr] = { n: 0, y: 0 });
@@ -883,8 +899,11 @@ function render(){
       placeBall(res.last.e.x, res.y); placeLines(null, null);
     } else { placeBall(null); placeLines(null, null); }
   }
-  $('liveBtn').hidden = !(S.viewDrive || S.selPlay);
-  $('liveBtn').textContent = isLive ? 'Back to live' : 'Back to latest drive';
+  $('liveBtn').hidden = true;
+  const atLive = TV.idx === null && !S.viewDrive && !S.selPlay;
+  $('navLive').classList.toggle('on', atLive && isLive);
+  $('navLive').innerHTML = isLive ? '<i></i>LIVE' : 'LATEST';
+  $('navLive').title = atLive ? (isLive ? 'You are watching live' : 'Showing the latest play') : (isLive ? 'Back to live' : 'Back to the latest play');
   $('replayBtn').disabled = !S.shownDrive;
 
   renderDrives(M);
@@ -954,7 +973,7 @@ function renderDrives(M){
     b.innerHTML = `<div class="row"><span><strong>${esc(D.team.abbr)}</strong> · ${D.period ? qtr(D.period) : ''} ${esc(D.clock)}</span><span class="res ${D.isScore ? 'score' : ''}">${esc(res)}</span></div>
       <div class="mini" aria-hidden="true">${bar}</div>
       ${D.desc ? `<div class="row" style="color:var(--muted);font-size:12px"><span>${esc(D.desc)}</span></div>` : ''}`;
-    b.onclick = () => { stopReplay(); S.selPlay = null; S.viewDrive = (D.id === M.currentDriveId && M.state === 'in') ? null : D.id; render(); };
+    b.onclick = () => { stopReplay(); TV.idx = null; S.selPlay = null; S.viewDrive = (D.id === M.currentDriveId && M.state === 'in') ? null : D.id; render(); };
     box.appendChild(b);
   });
 }
@@ -981,7 +1000,7 @@ function renderKeys(M){
     const b = document.createElement('button'); b.type = 'button'; b.className = 'playmain';
     b.innerHTML = `<div class="when"><span style="display:inline-block;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#fff;background:${k[1]};border-radius:4px;padding:1px 6px">${esc(k[0])}</span></div>
       <div><div class="sit">${esc(quarterLong(p.period, p.clock))}</div><div class="txt">${richText(describe(p, M), M)}</div></div>`;
-    b.onclick = () => { stopReplay(); if (p.s) { S.selPlay = p.id; S.viewDrive = D.id === M.currentDriveId && M.state === 'in' ? null : D.id; render(); } openPlay(p, D); };
+    b.onclick = () => { stopReplay(); if (p.s) { TV.idx = null; S.selPlay = p.id; S.viewDrive = D.id === M.currentDriveId && M.state === 'in' ? null : D.id; render(); } openPlay(p, D); };
     wrap.appendChild(b); box.appendChild(wrap);
   });
   // show about three moments, scroll inside the panel for the rest
@@ -1005,7 +1024,7 @@ function renderPlays(M){
     const b = document.createElement('button'); b.type = 'button'; b.className = 'playmain';
     b.innerHTML = `<div class="when">${p.period ? qtr(p.period) : ''} ${esc(p.clock)}</div>
       <div>${p.ddt || p.firstDown ? `<div class="sit">${esc(p.ddt || '')}${p.firstDown ? ' <span class="fdtag">1ST DOWN</span>' : ''}</div>` : ''}<div class="txt">${richText(describe(p, M), M)}</div></div>`;
-    b.onclick = () => { stopReplay(); if (p.s) { S.selPlay = p.id; if (D.id !== M.currentDriveId) S.viewDrive = D.id; render(); } openPlay(p, D); };
+    b.onclick = () => { stopReplay(); if (p.s) { TV.idx = null; S.selPlay = p.id; if (D.id !== M.currentDriveId) S.viewDrive = D.id; render(); } openPlay(p, D); };
     wrap.appendChild(b);
     if (p.flags && p.flags.length) wrap.insertAdjacentHTML('beforeend', p.flags.map((f, i) => flagDetails(f, M, p.id + ':' + i)).join(''));
     box.appendChild(wrap);
@@ -1509,7 +1528,8 @@ function tvList(M){ return M.drives.flatMap(D => D.plays.filter(p => p.text && !
 function tvStep(delta){
   const M = S.M; if (!M) return;
   const L = tvList(M); if (!L.length) return;
-  let i = TV.idx === null ? L.length - 1 : TV.idx;
+  const selI = S.selPlay ? L.findIndex(x => x.p.id === S.selPlay) : -1;
+  let i = TV.idx !== null ? TV.idx : selI >= 0 ? selI : L.length - 1;
   i = delta === Infinity ? L.length - 1 : Math.max(0, Math.min(L.length - 1, i + delta));
   stopReplay();
   if (i >= L.length - 1) { TV.idx = null; S.selPlay = null; S.viewDrive = null; }
@@ -1520,10 +1540,12 @@ function tvDrive(delta){
   const M = S.M; if (!M) return;
   const L = tvList(M); if (!L.length) return;
   const ids = [...new Set(L.map(x => x.D.id))];
-  const cur = L[TV.idx === null ? L.length - 1 : TV.idx].D.id;
+  const selI = S.selPlay ? L.findIndex(x => x.p.id === S.selPlay) : -1;
+  const from = TV.idx !== null ? TV.idx : selI >= 0 ? selI : L.length - 1;
+  const cur = L[from].D.id;
   const di = Math.max(0, Math.min(ids.length - 1, ids.indexOf(cur) + delta));
   let last = -1; L.forEach((x, i) => { if (x.D.id === ids[di]) last = i; });
-  const from = TV.idx === null ? L.length - 1 : TV.idx;
+  TV.idx = from === L.length - 1 ? null : from;
   tvStep(last - from);
 }
 function tvIdle(){ document.body.classList.remove('idle'); clearTimeout(TV.idleT); if (TV.on) TV.idleT = setTimeout(() => document.body.classList.add('idle'), 3000); }
@@ -1572,6 +1594,11 @@ function setFlip(on){ S.flip = !!on; store.set('fv-flip', S.flip ? '1' : '0'); s
 $('flipBtn').onclick = () => setFlip(!S.flip);
 if (store.get('fv-flip') === '1') S.flip = true;
 $('replayBtn').onclick = () => S.replay ? (stopReplay(), render()) : startReplay();
+$('navPP').onclick = () => tvStep(-1);
+$('navNP').onclick = () => tvStep(1);
+$('navPD').onclick = () => tvDrive(-1);
+$('navND').onclick = () => tvDrive(1);
+$('navLive').onclick = () => { stopReplay(); TV.idx = null; S.viewDrive = null; S.selPlay = null; if (S.M) render(); };
 $('liveBtn').onclick = () => { stopReplay(); S.viewDrive = null; S.selPlay = null; render(); };
 
 /* ---------- data loading ---------- */
@@ -1650,7 +1677,7 @@ $('weekBtn').onclick = () => { S.weekOffset = S.weekOffset ? 0 : 1; S.selId = nu
 
 /* ---------- app updates ---------- */
 // BUILD changes with every upload; the page checks the live copy for a newer BUILD (home-screen apps can't pull to refresh)
-const BUILD = '2026-11-16d';
+const BUILD = '2026-11-17a';
 function hardReload(){ const u = new URL(location.href); u.searchParams.set('v', Date.now().toString(36)); location.replace(u.toString()); }
 async function checkUpdate(){
   if (S.demo || location.protocol === 'file:') return;
