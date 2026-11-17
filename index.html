@@ -1123,8 +1123,8 @@ function plainPlay(p, M){
     const r = m[3].toUpperCase();
     return r === 'GOOD' ? `${m[1]} made a ${m[2]}-yard field goal. 3 points, ${O}.` : r === 'BLOCKED' ? `${Dn} blocked ${m[1]}'s ${m[2]}-yard field goal try!` : `${m[1]} missed a ${m[2]}-yard field goal. No points.`;
   }
-  if ((m = t.match(R(`(${NM}) extra point is (GOOD|No Good|BLOCKED)`)))) return /good/i.test(m[2]) && !/no good/i.test(m[2]) ? `${m[1]} made the extra point.` : `${m[1]}'s extra point ${/blocked/i.test(m[2]) ? 'was blocked' : 'missed'}.`;
-  if (/TWO-POINT CONVERSION ATTEMPT/i.test(t)) return /ATTEMPT SUCCEEDS/i.test(t) ? `The ${O} went for two and got it. 2 points!` : `The ${O} went for two but didn't get it.`;
+  if (!td && (m = t.match(R(`(${NM}) extra point is (GOOD|No Good|BLOCKED)`)))) return /good/i.test(m[2]) && !/no good/i.test(m[2]) ? `${m[1]} made the extra point.` : `${m[1]}'s extra point ${/blocked/i.test(m[2]) ? 'was blocked' : 'missed'}.`;
+  if (!td && /TWO-POINT CONVERSION ATTEMPT/i.test(t)) return /ATTEMPT SUCCEEDS/i.test(t) ? `The ${O} went for two and got it. 2 points!` : `The ${O} went for two but didn't get it.`;
   if ((m = t.match(R(`(${NM}) punts (\\d+) yards? to (${SP}|end zone)`)))) {
     out = `The ${O} punted ${yds(+m[2])} to ${m[3] === 'end zone' ? 'the end zone' : spotPlain(m[3], M)}.`;
     const fc = t.match(R(`fair catch by (${NM})`)); const ret = t.match(R(`(${NM}) (?:to (${SP}) )?for (-?\\d+) yards?`));
@@ -1699,7 +1699,7 @@ $('weekBtn').onclick = () => { S.weekOffset = S.weekOffset ? 0 : 1; S.selId = nu
 
 /* ---------- app updates ---------- */
 // BUILD changes with every upload; the page checks the live copy for a newer BUILD (home-screen apps can't pull to refresh)
-const BUILD = '2026-11-17d';
+const BUILD = '2026-11-17e';
 function hardReload(){ const u = new URL(location.href); u.searchParams.set('v', Date.now().toString(36)); location.replace(u.toString()); }
 async function checkUpdate(){
   if (S.demo || location.protocol === 'file:') return;
