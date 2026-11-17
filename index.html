@@ -474,7 +474,7 @@ function parseFlags(text){
   const out = []; if (!text) return out;
   const re = /PENALTY on ([A-Z]{2,4})(?:-([^,]+?))?,\s*([^,.]+?),\s*(?:(\d+)\s+yards?|(declined)|(offsetting))/gi;
   let m;
-  while ((m = re.exec(text))) out.push({ team: m[1].toUpperCase(), player: (m[2] || '').trim(), name: m[3].trim().replace(/\s+/g, ' '), yards: m[4] ? +m[4] : null, status: m[5] ? 'declined' : m[6] ? 'offsetting' : 'accepted' });
+  while ((m = re.exec(text))) out.push({ team: fixAbbr(m[1].toUpperCase()), player: (m[2] || '').trim(), name: m[3].trim().replace(/\s+/g, ' '), yards: m[4] ? +m[4] : null, status: m[5] ? 'declined' : m[6] ? 'offsetting' : 'accepted' });
   if (!out.length && /penalty/i.test(text)) out.push({ team: '', player: '', name: 'Penalty', yards: null, status: 'accepted' });
   return out;
 }
@@ -1699,7 +1699,7 @@ $('weekBtn').onclick = () => { S.weekOffset = S.weekOffset ? 0 : 1; S.selId = nu
 
 /* ---------- app updates ---------- */
 // BUILD changes with every upload; the page checks the live copy for a newer BUILD (home-screen apps can't pull to refresh)
-const BUILD = '2026-11-17c';
+const BUILD = '2026-11-17d';
 function hardReload(){ const u = new URL(location.href); u.searchParams.set('v', Date.now().toString(36)); location.replace(u.toString()); }
 async function checkUpdate(){
   if (S.demo || location.protocol === 'file:') return;
