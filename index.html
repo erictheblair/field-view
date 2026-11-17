@@ -522,6 +522,8 @@ function buildModel(){
   return M;
 }
 
+const TEXT_ABBR = { BLT: 'BAL', HST: 'HOU', ARZ: 'ARI', CLV: 'CLE', LA: 'LAR', JAC: 'JAX', WSH: 'WSH', WAS: 'WSH' };
+const fixAbbr = a => TEXT_ABBR[a] || a;
 function parsePT(txt, tid, M){
   if (!txt) return null;
   const t = String(txt).trim();
@@ -529,7 +531,7 @@ function parsePT(txt, tid, M){
   const m = t.match(/([A-Z]{2,4})\s+(\d{1,2})/);
   if (!m) return null;
   const n = +m[2]; const team = M.byId[tid];
-  if (team && team.abbr === m[1]) return 100 - n;
+  if (team && team.abbr === fixAbbr(m[1])) return 100 - n;
   return n;
 }
 
@@ -573,6 +575,12 @@ function normPlay(p, d, M){
     else if (isTD && /punt/i.test(type)) kickType = 'punt';
   }
   if (kickType === '2pt') kickType = null;
+  // ESPN sometimes tags a punt's starting spot with the receiving team while the yards are counted
+  // from the kicking team's side, which drew the kick from the wrong half. A kick always starts with the drive's offense.
+  if (kickType && kickType !== 'xp' && s && d.tid && s.tid !== d.tid && M.byId[d.tid]) {
+    const fix = spot(Object.assign({}, p.start, { team: { id: d.tid } }), d.tid, M);
+    if (fix) Object.assign(s, fix);
+  }
   // the try after a touchdown, when ESPN bundles it into the touchdown play
   let pat = null;
   if (isTD) {
@@ -858,17 +866,25 @@ function render(){
   $('mid').innerHTML = `<div class="clock">${esc(clockTxt)}</div>${isLive && live && live.ddt ? `<div class="dd">${esc(live.ddt)}</div>` : ''}${rz ? '<span class="rz">Red zone</span>' : ''}`;
 
   // last play
-  const allPlays = M.drives.flatMap(d => d.plays);
-  const lp = M.sit.lastPlay?.text || (allPlays.length ? allPlays[allPlays.length - 1].text : '');
+  // "End of game", timeouts and the like aren't plays worth showing as the last play
+  const allPlays = M.drives.flatMap(d => d.plays).filter(p => !SKIP.test(p.type || '') && !/^\s*end (game|of game|quarter|of quarter|half)\s*$/i.test(p.text || ''));
+  const sitLP = M.sit.lastPlay?.text && !/^\s*end (game|of game|quarter|half)/i.test(M.sit.lastPlay.text) ? M.sit.lastPlay.text : '';
+  const lp = sitLP || (allPlays.length ? allPlays[allPlays.length - 1].text : '');
   $('lpLabel').textContent = M.state === 'post' ? 'Final play' : 'Last play';
   const lastP = allPlays.length ? allPlays[allPlays.length - 1] : null;
-  const lpPlain = lastP && (!M.sit.lastPlay?.text || cleanText(M.sit.lastPlay.text) === cleanText(lastP.text)) ? `${quarterLong(lastP.period, lastP.clock)}: ${describe(lastP, M)}` : cleanText(lp);
+  const lpPlain = lastP && (!sitLP || cleanText(sitLP) === cleanText(lastP.text)) ? `${quarterLong(lastP.period, lastP.clock)}: ${describe(lastP, M)}` : cleanText(lp);
   $('lastPlay').innerHTML = lpPlain ? richText(lpPlain, M) : esc(M.state === 'pre' ? 'The game hasn\'t started yet.' : 'Waiting for the next play.');
+  $('lpFlag').innerHTML = parseFlags(lp).map((f, i) => flagDetails(f, M, 'lp' + i + lp.length)).join('');
   { const L = tvList(M); if (TV.idx !== null && TV.idx >= L.length - 1) TV.idx = null;
+    const vd = TV.idx === null && S.viewDrive && !S.selPlay ? M.drives.find(d => d.id === S.viewDrive) : null;
+    const vdp = vd ? vd.plays.filter(p => !SKIP.test(p.type || '') && p.text).slice(-1)[0] : null;
+    if (vdp && !TV.on) {
+      $('lpLabel').innerHTML = `${esc(vd.team ? vd.team.name : '')} drive<span class="lpback">Earlier drive</span>`;
+      $('lastPlay').innerHTML = richText(`${quarterLong(vdp.period, vdp.clock)}: ${describe(vdp, M)}`, M); $('lpFlag').innerHTML = '';
+    }
     if (TV.idx !== null && !TV.on) { const sp = L[TV.idx].p, ids = [...new Set(L.map(x => x.D.id))], db = ids.length - 1 - ids.indexOf(L[TV.idx].D.id), ahead = L.length - 1 - TV.idx;
       $('lpLabel').innerHTML = (sp.ddt ? esc(sp.ddt.replace(/ at .*/, '')) : 'Play') + `<span class="lpback">⏪ ${db > 0 ? `${db} drive${db === 1 ? '' : 's'} back` : `${ahead} play${ahead === 1 ? '' : 's'} back`}</span>`;
-      $('lastPlay').innerHTML = richText(`${quarterLong(sp.period, sp.clock)}: ${describe(sp, M)}`, M); } }
-  $('lpFlag').innerHTML = parseFlags(lp).map((f, i) => flagDetails(f, M, 'lp' + i + lp.length)).join('');
+      $('lastPlay').innerHTML = richText(`${quarterLong(sp.period, sp.clock)}: ${describe(sp, M)}`, M); $('lpFlag').innerHTML = ''; } }
   tvUpdate(M, lastP && lpPlain && lpPlain.includes(describe(lastP, M)) ? lastP : null, lpPlain);
   const tally = {}; [M.away, M.home].forEach(t => tally[t.abbr] = { n: 0, y: 0 });
   allPlays.forEach(p => (p.flags || []).forEach(f => { if (f.status === 'accepted' && tally[f.team]) { tally[f.team].n++; tally[f.team].y += f.yards || 0; } }));
@@ -1043,7 +1059,7 @@ function spotPlain(sp, M){
   if (!sp) return '';
   if (/^50$/.test(sp.trim())) return 'midfield';
   const m = sp.match(/([A-Z]{2,4}) (\d{1,2})/); if (!m) return sp;
-  const t = Object.values(M.byId).find(x => x.abbr === m[1]);
+  const t = Object.values(M.byId).find(x => x.abbr === fixAbbr(m[1]));
   return t ? `the ${t.name}' ${m[2]}` : sp;
 }
 const yds = n => `${n} yard${Math.abs(n) === 1 ? '' : 's'}`;
@@ -1677,7 +1693,7 @@ $('weekBtn').onclick = () => { S.weekOffset = S.weekOffset ? 0 : 1; S.selId = nu
 
 /* ---------- app updates ---------- */
 // BUILD changes with every upload; the page checks the live copy for a newer BUILD (home-screen apps can't pull to refresh)
-const BUILD = '2026-11-17a';
+const BUILD = '2026-11-17b';
 function hardReload(){ const u = new URL(location.href); u.searchParams.set('v', Date.now().toString(36)); location.replace(u.toString()); }
 async function checkUpdate(){
   if (S.demo || location.protocol === 'file:') return;
